@@ -1,71 +1,58 @@
-import { connect } from "@tidbcloud/serverless";
 import { entityKind } from "../entity.js";
 import { DefaultLogger } from "../logger.js";
-import { MySqlDatabase } from "../mysql-core/db.js";
-import { MySqlDialect } from "../mysql-core/dialect.js";
-import {
-  createTableRelationsHelpers,
-  extractTablesRelationalConfig
-} from "../relations.js";
-import { isConfig } from "../utils.js";
-import { TiDBServerlessSession } from "./session.js";
-class TiDBServerlessDatabase extends MySqlDatabase {
-  static [entityKind] = "TiDBServerlessDatabase";
+import { createTableRelationsHelpers, extractTablesRelationalConfig } from "../relations.js";
+import { BaseSQLiteDatabase } from "../sqlite-core/db.js";
+import { SQLiteAsyncDialect } from "../sqlite-core/dialect.js";
+import { SQLiteRemoteSession } from "./session.js";
+class SqliteRemoteDatabase extends BaseSQLiteDatabase {
+  static [entityKind] = "SqliteRemoteDatabase";
+  async batch(batch) {
+    return this.session.batch(batch);
+  }
 }
-function construct(client, config = {}) {
-  const dialect = new MySqlDialect({ casing: config.casing });
+function drizzle(callback, batchCallback, config) {
+  const dialect = new SQLiteAsyncDialect({ casing: config?.casing });
   let logger;
-  if (config.logger === true) {
-    logger = new DefaultLogger();
-  } else if (config.logger !== false) {
-    logger = config.logger;
+  let cache;
+  let _batchCallback;
+  let _config = {};
+  if (batchCallback) {
+    if (typeof batchCallback === "function") {
+      _batchCallback = batchCallback;
+      _config = config ?? {};
+    } else {
+      _batchCallback = void 0;
+      _config = batchCallback;
+    }
+    if (_config.logger === true) {
+      logger = new DefaultLogger();
+    } else if (_config.logger !== false) {
+      logger = _config.logger;
+      cache = _config.cache;
+    }
   }
   let schema;
-  if (config.schema) {
+  if (_config.schema) {
     const tablesConfig = extractTablesRelationalConfig(
-      config.schema,
+      _config.schema,
       createTableRelationsHelpers
     );
     schema = {
-      fullSchema: config.schema,
+      fullSchema: _config.schema,
       schema: tablesConfig.tables,
       tableNamesMap: tablesConfig.tableNamesMap
     };
   }
-  const session = new TiDBServerlessSession(client, dialect, void 0, schema, { logger, cache: config.cache });
-  const db = new TiDBServerlessDatabase(dialect, session, schema, "default");
-  db.$client = client;
-  db.$cache = config.cache;
+  const session = new SQLiteRemoteSession(callback, dialect, schema, _batchCallback, { logger, cache });
+  const db = new SqliteRemoteDatabase("async", dialect, session, schema);
+  db.$cache = cache;
   if (db.$cache) {
-    db.$cache["invalidate"] = config.cache?.onMutate;
+    db.$cache["invalidate"] = cache?.onMutate;
   }
   return db;
 }
-function drizzle(...params) {
-  if (typeof params[0] === "string") {
-    const instance = connect({
-      url: params[0]
-    });
-    return construct(instance, params[1]);
-  }
-  if (isConfig(params[0])) {
-    const { connection, client, ...drizzleConfig } = params[0];
-    if (client) return construct(client, drizzleConfig);
-    const instance = typeof connection === "string" ? connect({
-      url: connection
-    }) : connect(connection);
-    return construct(instance, drizzleConfig);
-  }
-  return construct(params[0], params[1]);
-}
-((drizzle2) => {
-  function mock(config) {
-    return construct({}, config);
-  }
-  drizzle2.mock = mock;
-})(drizzle || (drizzle = {}));
 export {
-  TiDBServerlessDatabase,
+  SqliteRemoteDatabase,
   drizzle
 };
 //# sourceMappingURL=driver.js.map

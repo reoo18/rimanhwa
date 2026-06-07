@@ -13,10 +13,10 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __reExport = (target, mod, secondTarget) => (__copyProps(target, mod, "default"), secondTarget && __copyProps(secondTarget, mod, "default"));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var tidb_serverless_exports = {};
-module.exports = __toCommonJS(tidb_serverless_exports);
-__reExport(tidb_serverless_exports, require("./driver.cjs"), module.exports);
-__reExport(tidb_serverless_exports, require("./session.cjs"), module.exports);
+var sqlite_proxy_exports = {};
+module.exports = __toCommonJS(sqlite_proxy_exports);
+__reExport(sqlite_proxy_exports, require("./driver.cjs"), module.exports);
+__reExport(sqlite_proxy_exports, require("./session.cjs"), module.exports);
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   ...require("./driver.cjs"),

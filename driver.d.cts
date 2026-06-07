@@ -1,32 +1,24 @@
-import { type Config, type Connection } from '@tidbcloud/serverless';
+import type { BatchItem, BatchResponse } from "../batch.cjs";
 import { entityKind } from "../entity.cjs";
-import type { Logger } from "../logger.cjs";
-import { MySqlDatabase } from "../mysql-core/db.cjs";
-import { type DrizzleConfig } from "../utils.cjs";
-import type { TiDBServerlessPreparedQueryHKT, TiDBServerlessQueryResultHKT } from "./session.cjs";
-export interface TiDBServerlessSDriverOptions {
-    logger?: Logger;
-    cache?: Cache;
+import { BaseSQLiteDatabase } from "../sqlite-core/db.cjs";
+import type { DrizzleConfig } from "../utils.cjs";
+export interface SqliteRemoteResult<T = unknown> {
+    rows?: T[];
 }
-export declare class TiDBServerlessDatabase<TSchema extends Record<string, unknown> = Record<string, never>> extends MySqlDatabase<TiDBServerlessQueryResultHKT, TiDBServerlessPreparedQueryHKT, TSchema> {
+export declare class SqliteRemoteDatabase<TSchema extends Record<string, unknown> = Record<string, never>> extends BaseSQLiteDatabase<'async', SqliteRemoteResult, TSchema> {
     static readonly [entityKind]: string;
+    batch<U extends BatchItem<'sqlite'>, T extends Readonly<[U, ...U[]]>>(batch: T): Promise<BatchResponse<T>>;
 }
-export declare function drizzle<TSchema extends Record<string, unknown> = Record<string, never>, TClient extends Connection = Connection>(...params: [
-    TClient | string
-] | [
-    TClient | string,
-    DrizzleConfig<TSchema>
-] | [
-    ({
-        connection: string | Config;
-    } | {
-        client: TClient;
-    }) & DrizzleConfig<TSchema>
-]): TiDBServerlessDatabase<TSchema> & {
-    $client: TClient;
-};
-export declare namespace drizzle {
-    function mock<TSchema extends Record<string, unknown> = Record<string, never>>(config?: DrizzleConfig<TSchema>): TiDBServerlessDatabase<TSchema> & {
-        $client: '$client is not available on drizzle.mock()';
-    };
-}
+export type AsyncRemoteCallback = (sql: string, params: any[], method: 'run' | 'all' | 'values' | 'get') => Promise<{
+    rows: any[];
+}>;
+export type AsyncBatchRemoteCallback = (batch: {
+    sql: string;
+    params: any[];
+    method: 'run' | 'all' | 'values' | 'get';
+}[]) => Promise<{
+    rows: any[];
+}[]>;
+export type RemoteCallback = AsyncRemoteCallback;
+export declare function drizzle<TSchema extends Record<string, unknown> = Record<string, never>>(callback: RemoteCallback, config?: DrizzleConfig<TSchema>): SqliteRemoteDatabase<TSchema>;
+export declare function drizzle<TSchema extends Record<string, unknown> = Record<string, never>>(callback: RemoteCallback, batchCallback?: AsyncBatchRemoteCallback, config?: DrizzleConfig<TSchema>): SqliteRemoteDatabase<TSchema>;
