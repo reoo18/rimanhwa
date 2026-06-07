@@ -18,190 +18,216 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var session_exports = {};
 __export(session_exports, {
-  RemotePreparedQuery: () => RemotePreparedQuery,
-  SQLiteProxyTransaction: () => SQLiteProxyTransaction,
-  SQLiteRemoteSession: () => SQLiteRemoteSession
+  ExecuteResultSync: () => ExecuteResultSync,
+  SQLitePreparedQuery: () => SQLitePreparedQuery,
+  SQLiteSession: () => SQLiteSession,
+  SQLiteTransaction: () => SQLiteTransaction
 });
 module.exports = __toCommonJS(session_exports);
-var import_core = require("../cache/core/index.cjs");
+var import_cache = require("../cache/core/cache.cjs");
 var import_entity = require("../entity.cjs");
-var import_logger = require("../logger.cjs");
-var import_sql = require("../sql/sql.cjs");
-var import_sqlite_core = require("../sqlite-core/index.cjs");
-var import_session = require("../sqlite-core/session.cjs");
-var import_utils = require("../utils.cjs");
-class SQLiteRemoteSession extends import_session.SQLiteSession {
-  constructor(client, dialect, schema, batchCLient, options = {}) {
-    super(dialect);
-    this.client = client;
-    this.schema = schema;
-    this.batchCLient = batchCLient;
-    this.logger = options.logger ?? new import_logger.NoopLogger();
-    this.cache = options.cache ?? new import_core.NoopCache();
+var import_errors = require("../errors.cjs");
+var import_query_promise = require("../query-promise.cjs");
+var import_db = require("./db.cjs");
+class ExecuteResultSync extends import_query_promise.QueryPromise {
+  constructor(resultCb) {
+    super();
+    this.resultCb = resultCb;
   }
-  static [import_entity.entityKind] = "SQLiteRemoteSession";
-  logger;
-  cache;
-  prepareQuery(query, fields, executeMethod, isResponseInArrayMode, customResultMapper, queryMetadata, cacheConfig) {
-    return new RemotePreparedQuery(
-      this.client,
+  static [import_entity.entityKind] = "ExecuteResultSync";
+  async execute() {
+    return this.resultCb();
+  }
+  sync() {
+    return this.resultCb();
+  }
+}
+class SQLitePreparedQuery {
+  constructor(mode, executeMethod, query, cache, queryMetadata, cacheConfig) {
+    this.mode = mode;
+    this.executeMethod = executeMethod;
+    this.query = query;
+    this.cache = cache;
+    this.queryMetadata = queryMetadata;
+    this.cacheConfig = cacheConfig;
+    if (cache && cache.strategy() === "all" && cacheConfig === void 0) {
+      this.cacheConfig = { enable: true, autoInvalidate: true };
+    }
+    if (!this.cacheConfig?.enable) {
+      this.cacheConfig = void 0;
+    }
+  }
+  static [import_entity.entityKind] = "PreparedQuery";
+  /** @internal */
+  joinsNotNullableMap;
+  /** @internal */
+  async queryWithCache(queryString, params, query) {
+    if (this.cache === void 0 || (0, import_entity.is)(this.cache, import_cache.NoopCache) || this.queryMetadata === void 0) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new import_errors.DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (this.cacheConfig && !this.cacheConfig.enable) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new import_errors.DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if ((this.queryMetadata.type === "insert" || this.queryMetadata.type === "update" || this.queryMetadata.type === "delete") && this.queryMetadata.tables.length > 0) {
+      try {
+        const [res] = await Promise.all([
+          query(),
+          this.cache.onMutate({ tables: this.queryMetadata.tables })
+        ]);
+        return res;
+      } catch (e) {
+        throw new import_errors.DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (!this.cacheConfig) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new import_errors.DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (this.queryMetadata.type === "select") {
+      const fromCache = await this.cache.get(
+        this.cacheConfig.tag ?? (await (0, import_cache.hashQuery)(queryString, params)),
+        this.queryMetadata.tables,
+        this.cacheConfig.tag !== void 0,
+        this.cacheConfig.autoInvalidate
+      );
+      if (fromCache === void 0) {
+        let result;
+        try {
+          result = await query();
+        } catch (e) {
+          throw new import_errors.DrizzleQueryError(queryString, params, e);
+        }
+        await this.cache.put(
+          this.cacheConfig.tag ?? (await (0, import_cache.hashQuery)(queryString, params)),
+          result,
+          // make sure we send tables that were used in a query only if user wants to invalidate it on each write
+          this.cacheConfig.autoInvalidate ? this.queryMetadata.tables : [],
+          this.cacheConfig.tag !== void 0,
+          this.cacheConfig.config
+        );
+        return result;
+      }
+      return fromCache;
+    }
+    try {
+      return await query();
+    } catch (e) {
+      throw new import_errors.DrizzleQueryError(queryString, params, e);
+    }
+  }
+  getQuery() {
+    return this.query;
+  }
+  mapRunResult(result, _isFromBatch) {
+    return result;
+  }
+  mapAllResult(_result, _isFromBatch) {
+    throw new Error("Not implemented");
+  }
+  mapGetResult(_result, _isFromBatch) {
+    throw new Error("Not implemented");
+  }
+  execute(placeholderValues) {
+    if (this.mode === "async") {
+      return this[this.executeMethod](placeholderValues);
+    }
+    return new ExecuteResultSync(() => this[this.executeMethod](placeholderValues));
+  }
+  mapResult(response, isFromBatch) {
+    switch (this.executeMethod) {
+      case "run": {
+        return this.mapRunResult(response, isFromBatch);
+      }
+      case "all": {
+        return this.mapAllResult(response, isFromBatch);
+      }
+      case "get": {
+        return this.mapGetResult(response, isFromBatch);
+      }
+    }
+  }
+}
+class SQLiteSession {
+  constructor(dialect) {
+    this.dialect = dialect;
+  }
+  static [import_entity.entityKind] = "SQLiteSession";
+  prepareOneTimeQuery(query, fields, executeMethod, isResponseInArrayMode, customResultMapper, queryMetadata, cacheConfig) {
+    return this.prepareQuery(
       query,
-      this.logger,
-      this.cache,
-      queryMetadata,
-      cacheConfig,
       fields,
       executeMethod,
       isResponseInArrayMode,
-      customResultMapper
+      customResultMapper,
+      queryMetadata,
+      cacheConfig
     );
   }
-  async batch(queries) {
-    const preparedQueries = [];
-    const builtQueries = [];
-    for (const query of queries) {
-      const preparedQuery = query._prepare();
-      const builtQuery = preparedQuery.getQuery();
-      preparedQueries.push(preparedQuery);
-      builtQueries.push({ sql: builtQuery.sql, params: builtQuery.params, method: builtQuery.method });
-    }
-    const batchResults = await this.batchCLient(builtQueries);
-    return batchResults.map((result, i) => preparedQueries[i].mapResult(result, true));
-  }
-  async transaction(transaction, config) {
-    const tx = new SQLiteProxyTransaction("async", this.dialect, this, this.schema);
-    await this.run(import_sql.sql.raw(`begin${config?.behavior ? " " + config.behavior : ""}`));
+  run(query) {
+    const staticQuery = this.dialect.sqlToQuery(query);
     try {
-      const result = await transaction(tx);
-      await this.run(import_sql.sql`commit`);
-      return result;
+      return this.prepareOneTimeQuery(staticQuery, void 0, "run", false).run();
     } catch (err) {
-      await this.run(import_sql.sql`rollback`);
-      throw err;
+      throw new import_errors.DrizzleError({ cause: err, message: `Failed to run the query '${staticQuery.sql}'` });
     }
-  }
-  extractRawAllValueFromBatchResult(result) {
-    return result.rows;
-  }
-  extractRawGetValueFromBatchResult(result) {
-    return result.rows[0];
-  }
-  extractRawValuesValueFromBatchResult(result) {
-    return result.rows;
-  }
-}
-class SQLiteProxyTransaction extends import_sqlite_core.SQLiteTransaction {
-  static [import_entity.entityKind] = "SQLiteProxyTransaction";
-  async transaction(transaction) {
-    const savepointName = `sp${this.nestedIndex}`;
-    const tx = new SQLiteProxyTransaction("async", this.dialect, this.session, this.schema, this.nestedIndex + 1);
-    await this.session.run(import_sql.sql.raw(`savepoint ${savepointName}`));
-    try {
-      const result = await transaction(tx);
-      await this.session.run(import_sql.sql.raw(`release savepoint ${savepointName}`));
-      return result;
-    } catch (err) {
-      await this.session.run(import_sql.sql.raw(`rollback to savepoint ${savepointName}`));
-      throw err;
-    }
-  }
-}
-class RemotePreparedQuery extends import_session.SQLitePreparedQuery {
-  constructor(client, query, logger, cache, queryMetadata, cacheConfig, fields, executeMethod, _isResponseInArrayMode, customResultMapper) {
-    super("async", executeMethod, query, cache, queryMetadata, cacheConfig);
-    this.client = client;
-    this.logger = logger;
-    this.fields = fields;
-    this._isResponseInArrayMode = _isResponseInArrayMode;
-    this.customResultMapper = customResultMapper;
-    this.customResultMapper = customResultMapper;
-    this.method = executeMethod;
-  }
-  static [import_entity.entityKind] = "SQLiteProxyPreparedQuery";
-  method;
-  getQuery() {
-    return { ...this.query, method: this.method };
-  }
-  async run(placeholderValues) {
-    const params = (0, import_sql.fillPlaceholders)(this.query.params, placeholderValues ?? {});
-    this.logger.logQuery(this.query.sql, params);
-    return await this.queryWithCache(this.query.sql, params, async () => {
-      return await this.client(this.query.sql, params, "run");
-    });
-  }
-  mapAllResult(rows, isFromBatch) {
-    if (isFromBatch) {
-      rows = rows.rows;
-    }
-    if (!this.fields && !this.customResultMapper) {
-      return rows;
-    }
-    if (this.customResultMapper) {
-      return this.customResultMapper(rows);
-    }
-    return rows.map((row) => {
-      return (0, import_utils.mapResultRow)(
-        this.fields,
-        row,
-        this.joinsNotNullableMap
-      );
-    });
-  }
-  async all(placeholderValues) {
-    const { query, logger, client } = this;
-    const params = (0, import_sql.fillPlaceholders)(query.params, placeholderValues ?? {});
-    logger.logQuery(query.sql, params);
-    const { rows } = await this.queryWithCache(query.sql, params, async () => {
-      return await client(query.sql, params, "all");
-    });
-    return this.mapAllResult(rows);
-  }
-  async get(placeholderValues) {
-    const { query, logger, client } = this;
-    const params = (0, import_sql.fillPlaceholders)(query.params, placeholderValues ?? {});
-    logger.logQuery(query.sql, params);
-    const clientResult = await this.queryWithCache(query.sql, params, async () => {
-      return await client(query.sql, params, "get");
-    });
-    return this.mapGetResult(clientResult.rows);
-  }
-  mapGetResult(rows, isFromBatch) {
-    if (isFromBatch) {
-      rows = rows.rows;
-    }
-    const row = rows;
-    if (!this.fields && !this.customResultMapper) {
-      return row;
-    }
-    if (!row) {
-      return void 0;
-    }
-    if (this.customResultMapper) {
-      return this.customResultMapper([rows]);
-    }
-    return (0, import_utils.mapResultRow)(
-      this.fields,
-      row,
-      this.joinsNotNullableMap
-    );
-  }
-  async values(placeholderValues) {
-    const params = (0, import_sql.fillPlaceholders)(this.query.params, placeholderValues ?? {});
-    this.logger.logQuery(this.query.sql, params);
-    const clientResult = await this.queryWithCache(this.query.sql, params, async () => {
-      return await this.client(this.query.sql, params, "values");
-    });
-    return clientResult.rows;
   }
   /** @internal */
-  isResponseInArrayMode() {
-    return this._isResponseInArrayMode;
+  extractRawRunValueFromBatchResult(result) {
+    return result;
+  }
+  all(query) {
+    return this.prepareOneTimeQuery(this.dialect.sqlToQuery(query), void 0, "run", false).all();
+  }
+  /** @internal */
+  extractRawAllValueFromBatchResult(_result) {
+    throw new Error("Not implemented");
+  }
+  get(query) {
+    return this.prepareOneTimeQuery(this.dialect.sqlToQuery(query), void 0, "run", false).get();
+  }
+  /** @internal */
+  extractRawGetValueFromBatchResult(_result) {
+    throw new Error("Not implemented");
+  }
+  values(query) {
+    return this.prepareOneTimeQuery(this.dialect.sqlToQuery(query), void 0, "run", false).values();
+  }
+  async count(sql) {
+    const result = await this.values(sql);
+    return result[0][0];
+  }
+  /** @internal */
+  extractRawValuesValueFromBatchResult(_result) {
+    throw new Error("Not implemented");
+  }
+}
+class SQLiteTransaction extends import_db.BaseSQLiteDatabase {
+  constructor(resultType, dialect, session, schema, nestedIndex = 0) {
+    super(resultType, dialect, session, schema);
+    this.schema = schema;
+    this.nestedIndex = nestedIndex;
+  }
+  static [import_entity.entityKind] = "SQLiteTransaction";
+  rollback() {
+    throw new import_errors.TransactionRollbackError();
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  RemotePreparedQuery,
-  SQLiteProxyTransaction,
-  SQLiteRemoteSession
+  ExecuteResultSync,
+  SQLitePreparedQuery,
+  SQLiteSession,
+  SQLiteTransaction
 });
 //# sourceMappingURL=session.cjs.map

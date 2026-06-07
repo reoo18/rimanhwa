@@ -1,20 +1,18 @@
-import { entityKind } from "./entity.cjs";
-import type { SQL, SQLWrapper } from "./sql/sql.cjs";
-export interface Subquery<TAlias extends string = string, TSelectedFields extends Record<string, unknown> = Record<string, unknown>> extends SQLWrapper {
-}
-export declare class Subquery<TAlias extends string = string, TSelectedFields extends Record<string, unknown> = Record<string, unknown>> implements SQLWrapper {
-    static readonly [entityKind]: string;
-    _: {
-        brand: 'Subquery';
-        sql: SQL;
-        selectedFields: TSelectedFields;
-        alias: TAlias;
-        isWith: boolean;
-        usedTables?: string[];
+import type { TypedQueryBuilder } from "../query-builders/query-builder.cjs";
+import type { AddAliasToSelection } from "../query-builders/select.types.cjs";
+import type { ColumnsSelection, SQL } from "../sql/sql.cjs";
+import type { Subquery, WithSubquery, WithSubqueryWithoutSelection } from "../subquery.cjs";
+import type { QueryBuilder } from "./query-builders/query-builder.cjs";
+export type SubqueryWithSelection<TSelection extends ColumnsSelection, TAlias extends string> = Subquery<TAlias, AddAliasToSelection<TSelection, TAlias, 'sqlite'>> & AddAliasToSelection<TSelection, TAlias, 'sqlite'>;
+export type WithSubqueryWithSelection<TSelection extends ColumnsSelection, TAlias extends string> = WithSubquery<TAlias, AddAliasToSelection<TSelection, TAlias, 'sqlite'>> & AddAliasToSelection<TSelection, TAlias, 'sqlite'>;
+export interface WithBuilder {
+    <TAlias extends string>(alias: TAlias): {
+        as: {
+            <TSelection extends ColumnsSelection>(qb: TypedQueryBuilder<TSelection> | ((qb: QueryBuilder) => TypedQueryBuilder<TSelection>)): WithSubqueryWithSelection<TSelection, TAlias>;
+            (qb: TypedQueryBuilder<undefined> | ((qb: QueryBuilder) => TypedQueryBuilder<undefined>)): WithSubqueryWithoutSelection<TAlias>;
+        };
     };
-    constructor(sql: SQL, fields: TSelectedFields, alias: string, isWith?: boolean, usedTables?: string[]);
+    <TAlias extends string, TSelection extends ColumnsSelection>(alias: TAlias, selection: TSelection): {
+        as: (qb: SQL | ((qb: QueryBuilder) => SQL)) => WithSubqueryWithSelection<TSelection, TAlias>;
+    };
 }
-export declare class WithSubquery<TAlias extends string = string, TSelection extends Record<string, unknown> = Record<string, unknown>> extends Subquery<TAlias, TSelection> {
-    static readonly [entityKind]: string;
-}
-export type WithSubqueryWithoutSelection<TAlias extends string> = WithSubquery<TAlias, {}>;

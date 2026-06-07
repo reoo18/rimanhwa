@@ -18,96 +18,62 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var table_exports = {};
 __export(table_exports, {
-  BaseName: () => BaseName,
-  Columns: () => Columns,
-  ExtraConfigBuilder: () => ExtraConfigBuilder,
-  ExtraConfigColumns: () => ExtraConfigColumns,
-  IsAlias: () => IsAlias,
-  OriginalName: () => OriginalName,
-  Schema: () => Schema,
-  Table: () => Table,
-  getTableName: () => getTableName,
-  getTableUniqueName: () => getTableUniqueName,
-  isTable: () => isTable
+  InlineForeignKeys: () => InlineForeignKeys,
+  SQLiteTable: () => SQLiteTable,
+  sqliteTable: () => sqliteTable,
+  sqliteTableCreator: () => sqliteTableCreator
 });
 module.exports = __toCommonJS(table_exports);
-var import_entity = require("./entity.cjs");
-var import_table_utils = require("./table.utils.cjs");
-const Schema = Symbol.for("drizzle:Schema");
-const Columns = Symbol.for("drizzle:Columns");
-const ExtraConfigColumns = Symbol.for("drizzle:ExtraConfigColumns");
-const OriginalName = Symbol.for("drizzle:OriginalName");
-const BaseName = Symbol.for("drizzle:BaseName");
-const IsAlias = Symbol.for("drizzle:IsAlias");
-const ExtraConfigBuilder = Symbol.for("drizzle:ExtraConfigBuilder");
-const IsDrizzleTable = Symbol.for("drizzle:IsDrizzleTable");
-class Table {
-  static [import_entity.entityKind] = "Table";
+var import_entity = require("../entity.cjs");
+var import_table = require("../table.cjs");
+var import_all = require("./columns/all.cjs");
+const InlineForeignKeys = Symbol.for("drizzle:SQLiteInlineForeignKeys");
+class SQLiteTable extends import_table.Table {
+  static [import_entity.entityKind] = "SQLiteTable";
   /** @internal */
-  static Symbol = {
-    Name: import_table_utils.TableName,
-    Schema,
-    OriginalName,
-    Columns,
-    ExtraConfigColumns,
-    BaseName,
-    IsAlias,
-    ExtraConfigBuilder
-  };
-  /**
-   * @internal
-   * Can be changed if the table is aliased.
-   */
-  [import_table_utils.TableName];
-  /**
-   * @internal
-   * Used to store the original name of the table, before any aliasing.
-   */
-  [OriginalName];
+  static Symbol = Object.assign({}, import_table.Table.Symbol, {
+    InlineForeignKeys
+  });
   /** @internal */
-  [Schema];
+  [import_table.Table.Symbol.Columns];
   /** @internal */
-  [Columns];
+  [InlineForeignKeys] = [];
   /** @internal */
-  [ExtraConfigColumns];
-  /**
-   *  @internal
-   * Used to store the table name before the transformation via the `tableCreator` functions.
-   */
-  [BaseName];
-  /** @internal */
-  [IsAlias] = false;
-  /** @internal */
-  [IsDrizzleTable] = true;
-  /** @internal */
-  [ExtraConfigBuilder] = void 0;
-  constructor(name, schema, baseName) {
-    this[import_table_utils.TableName] = this[OriginalName] = name;
-    this[Schema] = schema;
-    this[BaseName] = baseName;
+  [import_table.Table.Symbol.ExtraConfigBuilder] = void 0;
+}
+function sqliteTableBase(name, columns, extraConfig, schema, baseName = name) {
+  const rawTable = new SQLiteTable(name, schema, baseName);
+  const parsedColumns = typeof columns === "function" ? columns((0, import_all.getSQLiteColumnBuilders)()) : columns;
+  const builtColumns = Object.fromEntries(
+    Object.entries(parsedColumns).map(([name2, colBuilderBase]) => {
+      const colBuilder = colBuilderBase;
+      colBuilder.setName(name2);
+      const column = colBuilder.build(rawTable);
+      rawTable[InlineForeignKeys].push(...colBuilder.buildForeignKeys(column, rawTable));
+      return [name2, column];
+    })
+  );
+  const table = Object.assign(rawTable, builtColumns);
+  table[import_table.Table.Symbol.Columns] = builtColumns;
+  table[import_table.Table.Symbol.ExtraConfigColumns] = builtColumns;
+  if (extraConfig) {
+    table[SQLiteTable.Symbol.ExtraConfigBuilder] = extraConfig;
   }
+  return table;
 }
-function isTable(table) {
-  return typeof table === "object" && table !== null && IsDrizzleTable in table;
-}
-function getTableName(table) {
-  return table[import_table_utils.TableName];
-}
-function getTableUniqueName(table) {
-  return `${table[Schema] ?? "public"}.${table[import_table_utils.TableName]}`;
+const sqliteTable = (name, columns, extraConfig) => {
+  return sqliteTableBase(name, columns, extraConfig);
+};
+function sqliteTableCreator(customizeTableName) {
+  return (name, columns, extraConfig) => {
+    return sqliteTableBase(customizeTableName(name), columns, extraConfig, void 0, name);
+  };
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  BaseName,
-  Columns,
-  ExtraConfigBuilder,
-  ExtraConfigColumns,
-  IsAlias,
-  OriginalName,
-  Schema,
-  Table,
-  getTableName,
-  getTableUniqueName,
-  isTable
+  InlineForeignKeys,
+  SQLiteTable,
+  sqliteTable,
+  sqliteTableCreator
 });
 //# sourceMappingURL=table.cjs.map

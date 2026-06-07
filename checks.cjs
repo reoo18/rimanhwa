@@ -1,32 +1,57 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.toUpperCase = exports.toLowerCase = exports.trim = exports.normalize = exports.overwrite = exports.mime = exports.property = exports.endsWith = exports.startsWith = exports.includes = exports.uppercase = exports.lowercase = exports.regex = exports.length = exports.minLength = exports.maxLength = exports.size = exports.minSize = exports.maxSize = exports.multipleOf = exports.nonnegative = exports.nonpositive = exports.negative = exports.positive = exports.gte = exports.gt = exports.lte = exports.lt = void 0;
-var index_js_1 = require("../core/index.cjs");
-Object.defineProperty(exports, "lt", { enumerable: true, get: function () { return index_js_1._lt; } });
-Object.defineProperty(exports, "lte", { enumerable: true, get: function () { return index_js_1._lte; } });
-Object.defineProperty(exports, "gt", { enumerable: true, get: function () { return index_js_1._gt; } });
-Object.defineProperty(exports, "gte", { enumerable: true, get: function () { return index_js_1._gte; } });
-Object.defineProperty(exports, "positive", { enumerable: true, get: function () { return index_js_1._positive; } });
-Object.defineProperty(exports, "negative", { enumerable: true, get: function () { return index_js_1._negative; } });
-Object.defineProperty(exports, "nonpositive", { enumerable: true, get: function () { return index_js_1._nonpositive; } });
-Object.defineProperty(exports, "nonnegative", { enumerable: true, get: function () { return index_js_1._nonnegative; } });
-Object.defineProperty(exports, "multipleOf", { enumerable: true, get: function () { return index_js_1._multipleOf; } });
-Object.defineProperty(exports, "maxSize", { enumerable: true, get: function () { return index_js_1._maxSize; } });
-Object.defineProperty(exports, "minSize", { enumerable: true, get: function () { return index_js_1._minSize; } });
-Object.defineProperty(exports, "size", { enumerable: true, get: function () { return index_js_1._size; } });
-Object.defineProperty(exports, "maxLength", { enumerable: true, get: function () { return index_js_1._maxLength; } });
-Object.defineProperty(exports, "minLength", { enumerable: true, get: function () { return index_js_1._minLength; } });
-Object.defineProperty(exports, "length", { enumerable: true, get: function () { return index_js_1._length; } });
-Object.defineProperty(exports, "regex", { enumerable: true, get: function () { return index_js_1._regex; } });
-Object.defineProperty(exports, "lowercase", { enumerable: true, get: function () { return index_js_1._lowercase; } });
-Object.defineProperty(exports, "uppercase", { enumerable: true, get: function () { return index_js_1._uppercase; } });
-Object.defineProperty(exports, "includes", { enumerable: true, get: function () { return index_js_1._includes; } });
-Object.defineProperty(exports, "startsWith", { enumerable: true, get: function () { return index_js_1._startsWith; } });
-Object.defineProperty(exports, "endsWith", { enumerable: true, get: function () { return index_js_1._endsWith; } });
-Object.defineProperty(exports, "property", { enumerable: true, get: function () { return index_js_1._property; } });
-Object.defineProperty(exports, "mime", { enumerable: true, get: function () { return index_js_1._mime; } });
-Object.defineProperty(exports, "overwrite", { enumerable: true, get: function () { return index_js_1._overwrite; } });
-Object.defineProperty(exports, "normalize", { enumerable: true, get: function () { return index_js_1._normalize; } });
-Object.defineProperty(exports, "trim", { enumerable: true, get: function () { return index_js_1._trim; } });
-Object.defineProperty(exports, "toLowerCase", { enumerable: true, get: function () { return index_js_1._toLowerCase; } });
-Object.defineProperty(exports, "toUpperCase", { enumerable: true, get: function () { return index_js_1._toUpperCase; } });
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+var checks_exports = {};
+__export(checks_exports, {
+  Check: () => Check,
+  CheckBuilder: () => CheckBuilder,
+  check: () => check
+});
+module.exports = __toCommonJS(checks_exports);
+var import_entity = require("../entity.cjs");
+class CheckBuilder {
+  constructor(name, value) {
+    this.name = name;
+    this.value = value;
+  }
+  static [import_entity.entityKind] = "SQLiteCheckBuilder";
+  brand;
+  build(table) {
+    return new Check(table, this);
+  }
+}
+class Check {
+  constructor(table, builder) {
+    this.table = table;
+    this.name = builder.name;
+    this.value = builder.value;
+  }
+  static [import_entity.entityKind] = "SQLiteCheck";
+  name;
+  value;
+}
+function check(name, value) {
+  return new CheckBuilder(name, value);
+}
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  Check,
+  CheckBuilder,
+  check
+});
+//# sourceMappingURL=checks.cjs.map

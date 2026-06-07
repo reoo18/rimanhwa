@@ -1,69 +1,107 @@
-import type { BatchItem } from "../batch.cjs";
-import { type Cache } from "../cache/core/index.cjs";
+import { type Cache } from "../cache/core/cache.cjs";
 import type { WithCacheConfig } from "../cache/core/types.cjs";
 import { entityKind } from "../entity.cjs";
-import type { Logger } from "../logger.cjs";
-import type { RelationalSchemaConfig, TablesRelationalConfig } from "../relations.cjs";
-import { type Query } from "../sql/sql.cjs";
-import type { SQLiteAsyncDialect } from "../sqlite-core/dialect.cjs";
-import { SQLiteTransaction } from "../sqlite-core/index.cjs";
-import type { SelectedFieldsOrdered } from "../sqlite-core/query-builders/select.types.cjs";
-import type { PreparedQueryConfig as PreparedQueryConfigBase, SQLiteExecuteMethod, SQLiteTransactionConfig } from "../sqlite-core/session.cjs";
-import { SQLitePreparedQuery, SQLiteSession } from "../sqlite-core/session.cjs";
-import type { AsyncBatchRemoteCallback, RemoteCallback, SqliteRemoteResult } from "./driver.cjs";
-export interface SQLiteRemoteSessionOptions {
-    logger?: Logger;
-    cache?: Cache;
+import { QueryPromise } from "../query-promise.cjs";
+import type { TablesRelationalConfig } from "../relations.cjs";
+import type { PreparedQuery } from "../session.cjs";
+import type { Query, SQL } from "../sql/sql.cjs";
+import type { SQLiteAsyncDialect, SQLiteSyncDialect } from "./dialect.cjs";
+import { BaseSQLiteDatabase } from "./db.cjs";
+import type { SQLiteRaw } from "./query-builders/raw.cjs";
+import type { SelectedFieldsOrdered } from "./query-builders/select.types.cjs";
+export interface PreparedQueryConfig {
+    type: 'sync' | 'async';
+    run: unknown;
+    all: unknown;
+    get: unknown;
+    values: unknown;
+    execute: unknown;
 }
-export type PreparedQueryConfig = Omit<PreparedQueryConfigBase, 'statement' | 'run'>;
-export declare class SQLiteRemoteSession<TFullSchema extends Record<string, unknown>, TSchema extends TablesRelationalConfig> extends SQLiteSession<'async', SqliteRemoteResult, TFullSchema, TSchema> {
-    private client;
-    private schema;
-    private batchCLient?;
+export declare class ExecuteResultSync<T> extends QueryPromise<T> {
+    private resultCb;
     static readonly [entityKind]: string;
-    private logger;
-    private cache;
-    constructor(client: RemoteCallback, dialect: SQLiteAsyncDialect, schema: RelationalSchemaConfig<TSchema> | undefined, batchCLient?: AsyncBatchRemoteCallback | undefined, options?: SQLiteRemoteSessionOptions);
-    prepareQuery<T extends Omit<PreparedQueryConfig, 'run'>>(query: Query, fields: SelectedFieldsOrdered | undefined, executeMethod: SQLiteExecuteMethod, isResponseInArrayMode: boolean, customResultMapper?: (rows: unknown[][]) => unknown, queryMetadata?: {
+    constructor(resultCb: () => T);
+    execute(): Promise<T>;
+    sync(): T;
+}
+export type ExecuteResult<TType extends 'sync' | 'async', TResult> = TType extends 'async' ? Promise<TResult> : ExecuteResultSync<TResult>;
+export declare abstract class SQLitePreparedQuery<T extends PreparedQueryConfig> implements PreparedQuery {
+    private mode;
+    private executeMethod;
+    protected query: Query;
+    private cache?;
+    private queryMetadata?;
+    private cacheConfig?;
+    static readonly [entityKind]: string;
+    constructor(mode: 'sync' | 'async', executeMethod: SQLiteExecuteMethod, query: Query, cache?: Cache | undefined, queryMetadata?: {
         type: 'select' | 'update' | 'delete' | 'insert';
         tables: string[];
-    }, cacheConfig?: WithCacheConfig): RemotePreparedQuery<T>;
-    batch<T extends BatchItem<'sqlite'>[] | readonly BatchItem<'sqlite'>[]>(queries: T): Promise<unknown[]>;
-    transaction<T>(transaction: (tx: SQLiteProxyTransaction<TFullSchema, TSchema>) => Promise<T>, config?: SQLiteTransactionConfig): Promise<T>;
-    extractRawAllValueFromBatchResult(result: unknown): unknown;
-    extractRawGetValueFromBatchResult(result: unknown): unknown;
-    extractRawValuesValueFromBatchResult(result: unknown): unknown;
+    } | undefined, cacheConfig?: WithCacheConfig | undefined);
+    getQuery(): Query;
+    abstract run(placeholderValues?: Record<string, unknown>): Result<T['type'], T['run']>;
+    mapRunResult(result: unknown, _isFromBatch?: boolean): unknown;
+    abstract all(placeholderValues?: Record<string, unknown>): Result<T['type'], T['all']>;
+    mapAllResult(_result: unknown, _isFromBatch?: boolean): unknown;
+    abstract get(placeholderValues?: Record<string, unknown>): Result<T['type'], T['get']>;
+    mapGetResult(_result: unknown, _isFromBatch?: boolean): unknown;
+    abstract values(placeholderValues?: Record<string, unknown>): Result<T['type'], T['values']>;
+    execute(placeholderValues?: Record<string, unknown>): ExecuteResult<T['type'], T['execute']>;
+    mapResult(response: unknown, isFromBatch?: boolean): unknown;
 }
-export declare class SQLiteProxyTransaction<TFullSchema extends Record<string, unknown>, TSchema extends TablesRelationalConfig> extends SQLiteTransaction<'async', SqliteRemoteResult, TFullSchema, TSchema> {
-    static readonly [entityKind]: string;
-    transaction<T>(transaction: (tx: SQLiteProxyTransaction<TFullSchema, TSchema>) => Promise<T>): Promise<T>;
+export interface SQLiteTransactionConfig {
+    behavior?: 'deferred' | 'immediate' | 'exclusive';
 }
-export declare class RemotePreparedQuery<T extends PreparedQueryConfig = PreparedQueryConfig> extends SQLitePreparedQuery<{
-    type: 'async';
-    run: SqliteRemoteResult;
-    all: T['all'];
-    get: T['get'];
-    values: T['values'];
-    execute: T['execute'];
-}> {
-    private client;
-    private logger;
-    private fields;
-    private _isResponseInArrayMode;
+export type SQLiteExecuteMethod = 'run' | 'all' | 'get';
+export declare abstract class SQLiteSession<TResultKind extends 'sync' | 'async', TRunResult, TFullSchema extends Record<string, unknown>, TSchema extends TablesRelationalConfig> {
     static readonly [entityKind]: string;
-    private method;
-    constructor(client: RemoteCallback, query: Query, logger: Logger, cache: Cache, queryMetadata: {
+    constructor(
+    /** @internal */
+    dialect: {
+        sync: SQLiteSyncDialect;
+        async: SQLiteAsyncDialect;
+    }[TResultKind]);
+    abstract prepareQuery(query: Query, fields: SelectedFieldsOrdered | undefined, executeMethod: SQLiteExecuteMethod, isResponseInArrayMode: boolean, customResultMapper?: (rows: unknown[][], mapColumnValue?: (value: unknown) => unknown) => unknown, queryMetadata?: {
         type: 'select' | 'update' | 'delete' | 'insert';
         tables: string[];
-    } | undefined, cacheConfig: WithCacheConfig | undefined, fields: SelectedFieldsOrdered | undefined, executeMethod: SQLiteExecuteMethod, _isResponseInArrayMode: boolean, 
-    /** @internal */ customResultMapper?: ((rows: unknown[][], mapColumnValue?: (value: unknown) => unknown) => unknown) | undefined);
-    getQuery(): Query & {
-        method: SQLiteExecuteMethod;
-    };
-    run(placeholderValues?: Record<string, unknown>): Promise<SqliteRemoteResult>;
-    mapAllResult(rows: unknown, isFromBatch?: boolean): unknown;
-    all(placeholderValues?: Record<string, unknown>): Promise<T['all']>;
-    get(placeholderValues?: Record<string, unknown>): Promise<T['get']>;
-    mapGetResult(rows: unknown, isFromBatch?: boolean): unknown;
-    values<T extends any[] = unknown[]>(placeholderValues?: Record<string, unknown>): Promise<T[]>;
+    }, cacheConfig?: WithCacheConfig): SQLitePreparedQuery<PreparedQueryConfig & {
+        type: TResultKind;
+    }>;
+    prepareOneTimeQuery(query: Query, fields: SelectedFieldsOrdered | undefined, executeMethod: SQLiteExecuteMethod, isResponseInArrayMode: boolean, customResultMapper?: (rows: unknown[][], mapColumnValue?: (value: unknown) => unknown) => unknown, queryMetadata?: {
+        type: 'select' | 'update' | 'delete' | 'insert';
+        tables: string[];
+    }, cacheConfig?: WithCacheConfig): SQLitePreparedQuery<PreparedQueryConfig & {
+        type: TResultKind;
+    }>;
+    abstract transaction<T>(transaction: (tx: SQLiteTransaction<TResultKind, TRunResult, TFullSchema, TSchema>) => Result<TResultKind, T>, config?: SQLiteTransactionConfig): Result<TResultKind, T>;
+    run(query: SQL): Result<TResultKind, TRunResult>;
+    all<T = unknown>(query: SQL): Result<TResultKind, T[]>;
+    get<T = unknown>(query: SQL): Result<TResultKind, T>;
+    values<T extends any[] = unknown[]>(query: SQL): Result<TResultKind, T[]>;
+    count(sql: SQL): Promise<number>;
+}
+export type Result<TKind extends 'sync' | 'async', TResult> = {
+    sync: TResult;
+    async: Promise<TResult>;
+}[TKind];
+export type DBResult<TKind extends 'sync' | 'async', TResult> = {
+    sync: TResult;
+    async: SQLiteRaw<TResult>;
+}[TKind];
+export declare abstract class SQLiteTransaction<TResultType extends 'sync' | 'async', TRunResult, TFullSchema extends Record<string, unknown>, TSchema extends TablesRelationalConfig> extends BaseSQLiteDatabase<TResultType, TRunResult, TFullSchema, TSchema> {
+    protected schema: {
+        fullSchema: Record<string, unknown>;
+        schema: TSchema;
+        tableNamesMap: Record<string, string>;
+    } | undefined;
+    protected readonly nestedIndex: number;
+    static readonly [entityKind]: string;
+    constructor(resultType: TResultType, dialect: {
+        sync: SQLiteSyncDialect;
+        async: SQLiteAsyncDialect;
+    }[TResultType], session: SQLiteSession<TResultType, TRunResult, TFullSchema, TSchema>, schema: {
+        fullSchema: Record<string, unknown>;
+        schema: TSchema;
+        tableNamesMap: Record<string, string>;
+    } | undefined, nestedIndex?: number);
+    rollback(): never;
 }

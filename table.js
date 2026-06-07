@@ -1,79 +1,52 @@
-import { entityKind } from "./entity.js";
-import { TableName } from "./table.utils.js";
-const Schema = Symbol.for("drizzle:Schema");
-const Columns = Symbol.for("drizzle:Columns");
-const ExtraConfigColumns = Symbol.for("drizzle:ExtraConfigColumns");
-const OriginalName = Symbol.for("drizzle:OriginalName");
-const BaseName = Symbol.for("drizzle:BaseName");
-const IsAlias = Symbol.for("drizzle:IsAlias");
-const ExtraConfigBuilder = Symbol.for("drizzle:ExtraConfigBuilder");
-const IsDrizzleTable = Symbol.for("drizzle:IsDrizzleTable");
-class Table {
-  static [entityKind] = "Table";
+import { entityKind } from "../entity.js";
+import { Table } from "../table.js";
+import { getSQLiteColumnBuilders } from "./columns/all.js";
+const InlineForeignKeys = Symbol.for("drizzle:SQLiteInlineForeignKeys");
+class SQLiteTable extends Table {
+  static [entityKind] = "SQLiteTable";
   /** @internal */
-  static Symbol = {
-    Name: TableName,
-    Schema,
-    OriginalName,
-    Columns,
-    ExtraConfigColumns,
-    BaseName,
-    IsAlias,
-    ExtraConfigBuilder
-  };
-  /**
-   * @internal
-   * Can be changed if the table is aliased.
-   */
-  [TableName];
-  /**
-   * @internal
-   * Used to store the original name of the table, before any aliasing.
-   */
-  [OriginalName];
+  static Symbol = Object.assign({}, Table.Symbol, {
+    InlineForeignKeys
+  });
   /** @internal */
-  [Schema];
+  [Table.Symbol.Columns];
   /** @internal */
-  [Columns];
+  [InlineForeignKeys] = [];
   /** @internal */
-  [ExtraConfigColumns];
-  /**
-   *  @internal
-   * Used to store the table name before the transformation via the `tableCreator` functions.
-   */
-  [BaseName];
-  /** @internal */
-  [IsAlias] = false;
-  /** @internal */
-  [IsDrizzleTable] = true;
-  /** @internal */
-  [ExtraConfigBuilder] = void 0;
-  constructor(name, schema, baseName) {
-    this[TableName] = this[OriginalName] = name;
-    this[Schema] = schema;
-    this[BaseName] = baseName;
+  [Table.Symbol.ExtraConfigBuilder] = void 0;
+}
+function sqliteTableBase(name, columns, extraConfig, schema, baseName = name) {
+  const rawTable = new SQLiteTable(name, schema, baseName);
+  const parsedColumns = typeof columns === "function" ? columns(getSQLiteColumnBuilders()) : columns;
+  const builtColumns = Object.fromEntries(
+    Object.entries(parsedColumns).map(([name2, colBuilderBase]) => {
+      const colBuilder = colBuilderBase;
+      colBuilder.setName(name2);
+      const column = colBuilder.build(rawTable);
+      rawTable[InlineForeignKeys].push(...colBuilder.buildForeignKeys(column, rawTable));
+      return [name2, column];
+    })
+  );
+  const table = Object.assign(rawTable, builtColumns);
+  table[Table.Symbol.Columns] = builtColumns;
+  table[Table.Symbol.ExtraConfigColumns] = builtColumns;
+  if (extraConfig) {
+    table[SQLiteTable.Symbol.ExtraConfigBuilder] = extraConfig;
   }
+  return table;
 }
-function isTable(table) {
-  return typeof table === "object" && table !== null && IsDrizzleTable in table;
-}
-function getTableName(table) {
-  return table[TableName];
-}
-function getTableUniqueName(table) {
-  return `${table[Schema] ?? "public"}.${table[TableName]}`;
+const sqliteTable = (name, columns, extraConfig) => {
+  return sqliteTableBase(name, columns, extraConfig);
+};
+function sqliteTableCreator(customizeTableName) {
+  return (name, columns, extraConfig) => {
+    return sqliteTableBase(customizeTableName(name), columns, extraConfig, void 0, name);
+  };
 }
 export {
-  BaseName,
-  Columns,
-  ExtraConfigBuilder,
-  ExtraConfigColumns,
-  IsAlias,
-  OriginalName,
-  Schema,
-  Table,
-  getTableName,
-  getTableUniqueName,
-  isTable
+  InlineForeignKeys,
+  SQLiteTable,
+  sqliteTable,
+  sqliteTableCreator
 };
 //# sourceMappingURL=table.js.map
