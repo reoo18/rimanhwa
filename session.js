@@ -1,162 +1,170 @@
-import { entityKind } from "../entity.js";
-import { NoopLogger } from "../logger.js";
-import { PgTransaction } from "../pg-core/index.js";
-import { PgPreparedQuery, PgSession } from "../pg-core/session.js";
-import { fillPlaceholders, sql } from "../sql/sql.js";
-import { mapResultRow } from "../utils.js";
-import { types } from "@electric-sql/pglite";
-import { NoopCache } from "../cache/core/cache.js";
-class PglitePreparedQuery extends PgPreparedQuery {
-  constructor(client, queryString, params, logger, cache, queryMetadata, cacheConfig, fields, name, _isResponseInArrayMode, customResultMapper) {
-    super({ sql: queryString, params }, cache, queryMetadata, cacheConfig);
-    this.client = client;
-    this.queryString = queryString;
-    this.params = params;
-    this.logger = logger;
-    this.fields = fields;
-    this._isResponseInArrayMode = _isResponseInArrayMode;
-    this.customResultMapper = customResultMapper;
-    this.rawQueryConfig = {
-      rowMode: "object",
-      parsers: {
-        [types.TIMESTAMP]: (value) => value,
-        [types.TIMESTAMPTZ]: (value) => value,
-        [types.INTERVAL]: (value) => value,
-        [types.DATE]: (value) => value,
-        // numeric[]
-        [1231]: (value) => value,
-        // timestamp[]
-        [1115]: (value) => value,
-        // timestamp with timezone[]
-        [1185]: (value) => value,
-        // interval[]
-        [1187]: (value) => value,
-        // date[]
-        [1182]: (value) => value
-      }
-    };
-    this.queryConfig = {
-      rowMode: "array",
-      parsers: {
-        [types.TIMESTAMP]: (value) => value,
-        [types.TIMESTAMPTZ]: (value) => value,
-        [types.INTERVAL]: (value) => value,
-        [types.DATE]: (value) => value,
-        // numeric[]
-        [1231]: (value) => value,
-        // timestamp[]
-        [1115]: (value) => value,
-        // timestamp with timezone[]
-        [1185]: (value) => value,
-        // interval[]
-        [1187]: (value) => value,
-        // date[]
-        [1182]: (value) => value
-      }
-    };
-  }
-  static [entityKind] = "PglitePreparedQuery";
-  rawQueryConfig;
-  queryConfig;
-  async execute(placeholderValues = {}) {
-    const params = fillPlaceholders(this.params, placeholderValues);
-    this.logger.logQuery(this.queryString, params);
-    const { fields, client, queryConfig, joinsNotNullableMap, customResultMapper, queryString, rawQueryConfig } = this;
-    if (!fields && !customResultMapper) {
-      return this.queryWithCache(queryString, params, async () => {
-        return await client.query(queryString, params, rawQueryConfig);
-      });
+import { hashQuery, NoopCache } from "../cache/core/cache.js";
+import { entityKind, is } from "../entity.js";
+import { DrizzleQueryError, TransactionRollbackError } from "../errors.js";
+import { sql } from "../sql/index.js";
+import { tracer } from "../tracing.js";
+import { PgDatabase } from "./db.js";
+class PgPreparedQuery {
+  constructor(query, cache, queryMetadata, cacheConfig) {
+    this.query = query;
+    this.cache = cache;
+    this.queryMetadata = queryMetadata;
+    this.cacheConfig = cacheConfig;
+    if (cache && cache.strategy() === "all" && cacheConfig === void 0) {
+      this.cacheConfig = { enable: true, autoInvalidate: true };
     }
-    const result = await this.queryWithCache(queryString, params, async () => {
-      return await client.query(queryString, params, queryConfig);
-    });
-    return customResultMapper ? customResultMapper(result.rows) : result.rows.map((row) => mapResultRow(fields, row, joinsNotNullableMap));
+    if (!this.cacheConfig?.enable) {
+      this.cacheConfig = void 0;
+    }
   }
-  all(placeholderValues = {}) {
-    const params = fillPlaceholders(this.params, placeholderValues);
-    this.logger.logQuery(this.queryString, params);
-    return this.queryWithCache(this.queryString, params, async () => {
-      return await this.client.query(this.queryString, params, this.rawQueryConfig);
-    }).then((result) => result.rows);
+  authToken;
+  getQuery() {
+    return this.query;
+  }
+  mapResult(response, _isFromBatch) {
+    return response;
   }
   /** @internal */
-  isResponseInArrayMode() {
-    return this._isResponseInArrayMode;
+  setToken(token) {
+    this.authToken = token;
+    return this;
+  }
+  static [entityKind] = "PgPreparedQuery";
+  /** @internal */
+  joinsNotNullableMap;
+  /** @internal */
+  async queryWithCache(queryString, params, query) {
+    if (this.cache === void 0 || is(this.cache, NoopCache) || this.queryMetadata === void 0) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (this.cacheConfig && !this.cacheConfig.enable) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if ((this.queryMetadata.type === "insert" || this.queryMetadata.type === "update" || this.queryMetadata.type === "delete") && this.queryMetadata.tables.length > 0) {
+      try {
+        const [res] = await Promise.all([
+          query(),
+          this.cache.onMutate({ tables: this.queryMetadata.tables })
+        ]);
+        return res;
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (!this.cacheConfig) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (this.queryMetadata.type === "select") {
+      const fromCache = await this.cache.get(
+        this.cacheConfig.tag ?? (await hashQuery(queryString, params)),
+        this.queryMetadata.tables,
+        this.cacheConfig.tag !== void 0,
+        this.cacheConfig.autoInvalidate
+      );
+      if (fromCache === void 0) {
+        let result;
+        try {
+          result = await query();
+        } catch (e) {
+          throw new DrizzleQueryError(queryString, params, e);
+        }
+        await this.cache.put(
+          this.cacheConfig.tag ?? (await hashQuery(queryString, params)),
+          result,
+          // make sure we send tables that were used in a query only if user wants to invalidate it on each write
+          this.cacheConfig.autoInvalidate ? this.queryMetadata.tables : [],
+          this.cacheConfig.tag !== void 0,
+          this.cacheConfig.config
+        );
+        return result;
+      }
+      return fromCache;
+    }
+    try {
+      return await query();
+    } catch (e) {
+      throw new DrizzleQueryError(queryString, params, e);
+    }
   }
 }
-class PgliteSession extends PgSession {
-  constructor(client, dialect, schema, options = {}) {
-    super(dialect);
-    this.client = client;
-    this.schema = schema;
-    this.options = options;
-    this.logger = options.logger ?? new NoopLogger();
-    this.cache = options.cache ?? new NoopCache();
+class PgSession {
+  constructor(dialect) {
+    this.dialect = dialect;
   }
-  static [entityKind] = "PgliteSession";
-  logger;
-  cache;
-  prepareQuery(query, fields, name, isResponseInArrayMode, customResultMapper, queryMetadata, cacheConfig) {
-    return new PglitePreparedQuery(
-      this.client,
-      query.sql,
-      query.params,
-      this.logger,
-      this.cache,
-      queryMetadata,
-      cacheConfig,
-      fields,
-      name,
-      isResponseInArrayMode,
-      customResultMapper
-    );
-  }
-  async transaction(transaction, config) {
-    return this.client.transaction(async (client) => {
-      const session = new PgliteSession(
-        client,
-        this.dialect,
-        this.schema,
-        this.options
-      );
-      const tx = new PgliteTransaction(this.dialect, session, this.schema);
-      if (config) {
-        await tx.setTransaction(config);
-      }
-      return transaction(tx);
+  static [entityKind] = "PgSession";
+  /** @internal */
+  execute(query, token) {
+    return tracer.startActiveSpan("drizzle.operation", () => {
+      const prepared = tracer.startActiveSpan("drizzle.prepareQuery", () => {
+        return this.prepareQuery(
+          this.dialect.sqlToQuery(query),
+          void 0,
+          void 0,
+          false
+        );
+      });
+      return prepared.setToken(token).execute(void 0, token);
     });
   }
-  async count(sql2) {
-    const res = await this.execute(sql2);
+  all(query) {
+    return this.prepareQuery(
+      this.dialect.sqlToQuery(query),
+      void 0,
+      void 0,
+      false
+    ).all();
+  }
+  /** @internal */
+  async count(sql2, token) {
+    const res = await this.execute(sql2, token);
     return Number(
-      res["rows"][0]["count"]
+      res[0]["count"]
     );
   }
 }
-class PgliteTransaction extends PgTransaction {
-  static [entityKind] = "PgliteTransaction";
-  async transaction(transaction) {
-    const savepointName = `sp${this.nestedIndex + 1}`;
-    const tx = new PgliteTransaction(
-      this.dialect,
-      this.session,
-      this.schema,
-      this.nestedIndex + 1
-    );
-    await tx.execute(sql.raw(`savepoint ${savepointName}`));
-    try {
-      const result = await transaction(tx);
-      await tx.execute(sql.raw(`release savepoint ${savepointName}`));
-      return result;
-    } catch (err) {
-      await tx.execute(sql.raw(`rollback to savepoint ${savepointName}`));
-      throw err;
+class PgTransaction extends PgDatabase {
+  constructor(dialect, session, schema, nestedIndex = 0) {
+    super(dialect, session, schema);
+    this.schema = schema;
+    this.nestedIndex = nestedIndex;
+  }
+  static [entityKind] = "PgTransaction";
+  rollback() {
+    throw new TransactionRollbackError();
+  }
+  /** @internal */
+  getTransactionConfigSQL(config) {
+    const chunks = [];
+    if (config.isolationLevel) {
+      chunks.push(`isolation level ${config.isolationLevel}`);
     }
+    if (config.accessMode) {
+      chunks.push(config.accessMode);
+    }
+    if (typeof config.deferrable === "boolean") {
+      chunks.push(config.deferrable ? "deferrable" : "not deferrable");
+    }
+    return sql.raw(chunks.join(" "));
+  }
+  setTransaction(config) {
+    return this.session.execute(sql`set transaction ${this.getTransactionConfigSQL(config)}`);
   }
 }
 export {
-  PglitePreparedQuery,
-  PgliteSession,
-  PgliteTransaction
+  PgPreparedQuery,
+  PgSession,
+  PgTransaction
 };
 //# sourceMappingURL=session.js.map

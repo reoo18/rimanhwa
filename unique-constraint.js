@@ -11,16 +11,22 @@ class UniqueConstraintBuilder {
     this.name = name;
     this.columns = columns;
   }
-  static [entityKind] = "SingleStoreUniqueConstraintBuilder";
+  static [entityKind] = "PgUniqueConstraintBuilder";
   /** @internal */
   columns;
   /** @internal */
+  nullsNotDistinctConfig = false;
+  nullsNotDistinct() {
+    this.nullsNotDistinctConfig = true;
+    return this;
+  }
+  /** @internal */
   build(table) {
-    return new UniqueConstraint(table, this.columns, this.name);
+    return new UniqueConstraint(table, this.columns, this.nullsNotDistinctConfig, this.name);
   }
 }
 class UniqueOnConstraintBuilder {
-  static [entityKind] = "SingleStoreUniqueOnConstraintBuilder";
+  static [entityKind] = "PgUniqueOnConstraintBuilder";
   /** @internal */
   name;
   constructor(name) {
@@ -31,12 +37,13 @@ class UniqueOnConstraintBuilder {
   }
 }
 class UniqueConstraint {
-  constructor(table, columns, name) {
+  constructor(table, columns, nullsNotDistinct, name) {
     this.table = table;
     this.columns = columns;
     this.name = name ?? uniqueKeyName(this.table, this.columns.map((column) => column.name));
+    this.nullsNotDistinct = nullsNotDistinct;
   }
-  static [entityKind] = "SingleStoreUniqueConstraint";
+  static [entityKind] = "PgUniqueConstraint";
   columns;
   name;
   nullsNotDistinct = false;

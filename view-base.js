@@ -1,9 +1,9 @@
 import { entityKind } from "../entity.js";
 import { View } from "../sql/sql.js";
-class SingleStoreViewBase extends View {
-  static [entityKind] = "SingleStoreViewBase";
+class PgViewBase extends View {
+  static [entityKind] = "PgViewBase";
 }
 export {
-  SingleStoreViewBase
+  PgViewBase
 };
 //# sourceMappingURL=view-base.js.map

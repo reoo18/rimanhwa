@@ -1,1 +1,1 @@
-export declare const SingleStoreViewConfig: unique symbol;
+export declare const PgViewConfig: unique symbol;

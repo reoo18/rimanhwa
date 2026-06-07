@@ -1,24 +1,25 @@
 import { entityKind } from "../entity.cjs";
-import type { SingleStoreColumn } from "./columns/index.cjs";
-import type { SingleStoreTable } from "./table.cjs";
+import type { PgColumn } from "./columns/index.cjs";
+import type { PgTable } from "./table.cjs";
 export declare function unique(name?: string): UniqueOnConstraintBuilder;
-export declare function uniqueKeyName(table: SingleStoreTable, columns: string[]): string;
+export declare function uniqueKeyName(table: PgTable, columns: string[]): string;
 export declare class UniqueConstraintBuilder {
     private name?;
     static readonly [entityKind]: string;
-    constructor(columns: SingleStoreColumn[], name?: string | undefined);
+    constructor(columns: PgColumn[], name?: string | undefined);
+    nullsNotDistinct(): this;
 }
 export declare class UniqueOnConstraintBuilder {
     static readonly [entityKind]: string;
     constructor(name?: string);
-    on(...columns: [SingleStoreColumn, ...SingleStoreColumn[]]): UniqueConstraintBuilder;
+    on(...columns: [PgColumn, ...PgColumn[]]): UniqueConstraintBuilder;
 }
 export declare class UniqueConstraint {
-    readonly table: SingleStoreTable;
+    readonly table: PgTable;
     static readonly [entityKind]: string;
-    readonly columns: SingleStoreColumn[];
+    readonly columns: PgColumn[];
     readonly name?: string;
     readonly nullsNotDistinct: boolean;
-    constructor(table: SingleStoreTable, columns: SingleStoreColumn[], name?: string);
+    constructor(table: PgTable, columns: PgColumn[], nullsNotDistinct: boolean, name?: string);
     getName(): string | undefined;
 }

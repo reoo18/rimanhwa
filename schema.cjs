@@ -18,39 +18,63 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var schema_exports = {};
 __export(schema_exports, {
-  SingleStoreSchema: () => SingleStoreSchema,
-  isSingleStoreSchema: () => isSingleStoreSchema,
-  singlestoreDatabase: () => singlestoreDatabase,
-  singlestoreSchema: () => singlestoreSchema
+  PgSchema: () => PgSchema,
+  isPgSchema: () => isPgSchema,
+  pgSchema: () => pgSchema
 });
 module.exports = __toCommonJS(schema_exports);
 var import_entity = require("../entity.cjs");
+var import_sql = require("../sql/sql.cjs");
+var import_enum = require("./columns/enum.cjs");
+var import_sequence = require("./sequence.cjs");
 var import_table = require("./table.cjs");
-class SingleStoreSchema {
+var import_view = require("./view.cjs");
+class PgSchema {
   constructor(schemaName) {
     this.schemaName = schemaName;
   }
-  static [import_entity.entityKind] = "SingleStoreSchema";
+  static [import_entity.entityKind] = "PgSchema";
   table = (name, columns, extraConfig) => {
-    return (0, import_table.singlestoreTableWithSchema)(name, columns, extraConfig, this.schemaName);
+    return (0, import_table.pgTableWithSchema)(name, columns, extraConfig, this.schemaName);
   };
-  /*
-  view = ((name, columns) => {
-  	return singlestoreViewWithSchema(name, columns, this.schemaName);
-  }) as typeof singlestoreView; */
+  view = (name, columns) => {
+    return (0, import_view.pgViewWithSchema)(name, columns, this.schemaName);
+  };
+  materializedView = (name, columns) => {
+    return (0, import_view.pgMaterializedViewWithSchema)(name, columns, this.schemaName);
+  };
+  enum(enumName, input) {
+    return Array.isArray(input) ? (0, import_enum.pgEnumWithSchema)(
+      enumName,
+      [...input],
+      this.schemaName
+    ) : (0, import_enum.pgEnumObjectWithSchema)(enumName, input, this.schemaName);
+  }
+  sequence = (name, options) => {
+    return (0, import_sequence.pgSequenceWithSchema)(name, options, this.schemaName);
+  };
+  getSQL() {
+    return new import_sql.SQL([import_sql.sql.identifier(this.schemaName)]);
+  }
+  shouldOmitSQLParens() {
+    return true;
+  }
 }
-function isSingleStoreSchema(obj) {
-  return (0, import_entity.is)(obj, SingleStoreSchema);
+function isPgSchema(obj) {
+  return (0, import_entity.is)(obj, PgSchema);
 }
-function singlestoreDatabase(name) {
-  return new SingleStoreSchema(name);
+function pgSchema(name) {
+  if (name === "public") {
+    throw new Error(
+      `You can't specify 'public' as schema name. Postgres is using public schema by default. If you want to use 'public' schema, just use pgTable() instead of creating a schema`
+    );
+  }
+  return new PgSchema(name);
 }
-const singlestoreSchema = singlestoreDatabase;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreSchema,
-  isSingleStoreSchema,
-  singlestoreDatabase,
-  singlestoreSchema
+  PgSchema,
+  isPgSchema,
+  pgSchema
 });
 //# sourceMappingURL=schema.cjs.map

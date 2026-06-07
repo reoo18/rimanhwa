@@ -1,49 +1,47 @@
-import type { BuildColumns } from "../column-builder.cjs";
+import type { BuildColumns, BuildExtraConfigColumns } from "../column-builder.cjs";
 import { entityKind } from "../entity.cjs";
 import { Table, type TableConfig as TableConfigBase, type UpdateTableConfig } from "../table.cjs";
-import { type SingleStoreColumnBuilders } from "./columns/all.cjs";
-import type { SingleStoreColumn, SingleStoreColumnBuilderBase } from "./columns/common.cjs";
+import type { CheckBuilder } from "./checks.cjs";
+import { type PgColumnsBuilders } from "./columns/all.cjs";
+import type { PgColumn, PgColumnBuilderBase } from "./columns/common.cjs";
+import type { ForeignKeyBuilder } from "./foreign-keys.cjs";
 import type { AnyIndexBuilder } from "./indexes.cjs";
+import type { PgPolicy } from "./policies.cjs";
 import type { PrimaryKeyBuilder } from "./primary-keys.cjs";
 import type { UniqueConstraintBuilder } from "./unique-constraint.cjs";
-export type SingleStoreTableExtraConfigValue = AnyIndexBuilder | PrimaryKeyBuilder | UniqueConstraintBuilder;
-export type SingleStoreTableExtraConfig = Record<string, SingleStoreTableExtraConfigValue>;
-export type TableConfig = TableConfigBase<SingleStoreColumn>;
-export declare class SingleStoreTable<T extends TableConfig = TableConfig> extends Table<T> {
+export type PgTableExtraConfigValue = AnyIndexBuilder | CheckBuilder | ForeignKeyBuilder | PrimaryKeyBuilder | UniqueConstraintBuilder | PgPolicy;
+export type PgTableExtraConfig = Record<string, PgTableExtraConfigValue>;
+export type TableConfig = TableConfigBase<PgColumn>;
+export declare class PgTable<T extends TableConfig = TableConfig> extends Table<T> {
     static readonly [entityKind]: string;
-    protected $columns: T['columns'];
 }
-export type AnySingleStoreTable<TPartial extends Partial<TableConfig> = {}> = SingleStoreTable<UpdateTableConfig<TableConfig, TPartial>>;
-export type SingleStoreTableWithColumns<T extends TableConfig> = SingleStoreTable<T> & {
+export type AnyPgTable<TPartial extends Partial<TableConfig> = {}> = PgTable<UpdateTableConfig<TableConfig, TPartial>>;
+export type PgTableWithColumns<T extends TableConfig> = PgTable<T> & {
     [Key in keyof T['columns']]: T['columns'][Key];
+} & {
+    enableRLS: () => Omit<PgTableWithColumns<T>, 'enableRLS'>;
 };
-export declare function singlestoreTableWithSchema<TTableName extends string, TSchemaName extends string | undefined, TColumnsMap extends Record<string, SingleStoreColumnBuilderBase>>(name: TTableName, columns: TColumnsMap | ((columnTypes: SingleStoreColumnBuilders) => TColumnsMap), extraConfig: ((self: BuildColumns<TTableName, TColumnsMap, 'singlestore'>) => SingleStoreTableExtraConfig | SingleStoreTableExtraConfigValue[]) | undefined, schema: TSchemaName, baseName?: TTableName): SingleStoreTableWithColumns<{
-    name: TTableName;
-    schema: TSchemaName;
-    columns: BuildColumns<TTableName, TColumnsMap, 'singlestore'>;
-    dialect: 'singlestore';
-}>;
-export interface SingleStoreTableFn<TSchemaName extends string | undefined = undefined> {
-    <TTableName extends string, TColumnsMap extends Record<string, SingleStoreColumnBuilderBase>>(name: TTableName, columns: TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'singlestore'>) => SingleStoreTableExtraConfigValue[]): SingleStoreTableWithColumns<{
+export interface PgTableFn<TSchema extends string | undefined = undefined> {
+    <TTableName extends string, TColumnsMap extends Record<string, PgColumnBuilderBase>>(name: TTableName, columns: TColumnsMap, extraConfig?: (self: BuildExtraConfigColumns<TTableName, TColumnsMap, 'pg'>) => PgTableExtraConfigValue[]): PgTableWithColumns<{
         name: TTableName;
-        schema: TSchemaName;
-        columns: BuildColumns<TTableName, TColumnsMap, 'singlestore'>;
-        dialect: 'singlestore';
+        schema: TSchema;
+        columns: BuildColumns<TTableName, TColumnsMap, 'pg'>;
+        dialect: 'pg';
     }>;
-    <TTableName extends string, TColumnsMap extends Record<string, SingleStoreColumnBuilderBase>>(name: TTableName, columns: (columnTypes: SingleStoreColumnBuilders) => TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'singlestore'>) => SingleStoreTableExtraConfigValue[]): SingleStoreTableWithColumns<{
+    <TTableName extends string, TColumnsMap extends Record<string, PgColumnBuilderBase>>(name: TTableName, columns: (columnTypes: PgColumnsBuilders) => TColumnsMap, extraConfig?: (self: BuildExtraConfigColumns<TTableName, TColumnsMap, 'pg'>) => PgTableExtraConfigValue[]): PgTableWithColumns<{
         name: TTableName;
-        schema: TSchemaName;
-        columns: BuildColumns<TTableName, TColumnsMap, 'singlestore'>;
-        dialect: 'singlestore';
+        schema: TSchema;
+        columns: BuildColumns<TTableName, TColumnsMap, 'pg'>;
+        dialect: 'pg';
     }>;
     /**
-     * @deprecated The third parameter of singlestoreTable is changing and will only accept an array instead of an object
+     * @deprecated The third parameter of pgTable is changing and will only accept an array instead of an object
      *
      * @example
      * Deprecated version:
      * ```ts
-     * export const users = singlestoreTable("users", {
-     * 	id: int(),
+     * export const users = pgTable("users", {
+     * 	id: integer(),
      * }, (t) => ({
      * 	idx: index('custom_name').on(t.id)
      * }));
@@ -51,27 +49,27 @@ export interface SingleStoreTableFn<TSchemaName extends string | undefined = und
      *
      * New API:
      * ```ts
-     * export const users = singlestoreTable("users", {
-     * 	id: int(),
+     * export const users = pgTable("users", {
+     * 	id: integer(),
      * }, (t) => [
      * 	index('custom_name').on(t.id)
      * ]);
      * ```
      */
-    <TTableName extends string, TColumnsMap extends Record<string, SingleStoreColumnBuilderBase>>(name: TTableName, columns: TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'singlestore'>) => SingleStoreTableExtraConfig): SingleStoreTableWithColumns<{
+    <TTableName extends string, TColumnsMap extends Record<string, PgColumnBuilderBase>>(name: TTableName, columns: TColumnsMap, extraConfig: (self: BuildExtraConfigColumns<TTableName, TColumnsMap, 'pg'>) => PgTableExtraConfig): PgTableWithColumns<{
         name: TTableName;
-        schema: TSchemaName;
-        columns: BuildColumns<TTableName, TColumnsMap, 'singlestore'>;
-        dialect: 'singlestore';
+        schema: TSchema;
+        columns: BuildColumns<TTableName, TColumnsMap, 'pg'>;
+        dialect: 'pg';
     }>;
     /**
-     * @deprecated The third parameter of singlestoreTable is changing and will only accept an array instead of an object
+     * @deprecated The third parameter of pgTable is changing and will only accept an array instead of an object
      *
      * @example
      * Deprecated version:
      * ```ts
-     * export const users = singlestoreTable("users", {
-     * 	id: int(),
+     * export const users = pgTable("users", {
+     * 	id: integer(),
      * }, (t) => ({
      * 	idx: index('custom_name').on(t.id)
      * }));
@@ -79,19 +77,19 @@ export interface SingleStoreTableFn<TSchemaName extends string | undefined = und
      *
      * New API:
      * ```ts
-     * export const users = singlestoreTable("users", {
-     * 	id: int(),
+     * export const users = pgTable("users", {
+     * 	id: integer(),
      * }, (t) => [
      * 	index('custom_name').on(t.id)
      * ]);
      * ```
      */
-    <TTableName extends string, TColumnsMap extends Record<string, SingleStoreColumnBuilderBase>>(name: TTableName, columns: (columnTypes: SingleStoreColumnBuilders) => TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'singlestore'>) => SingleStoreTableExtraConfig): SingleStoreTableWithColumns<{
+    <TTableName extends string, TColumnsMap extends Record<string, PgColumnBuilderBase>>(name: TTableName, columns: (columnTypes: PgColumnsBuilders) => TColumnsMap, extraConfig: (self: BuildExtraConfigColumns<TTableName, TColumnsMap, 'pg'>) => PgTableExtraConfig): PgTableWithColumns<{
         name: TTableName;
-        schema: TSchemaName;
-        columns: BuildColumns<TTableName, TColumnsMap, 'singlestore'>;
-        dialect: 'singlestore';
+        schema: TSchema;
+        columns: BuildColumns<TTableName, TColumnsMap, 'pg'>;
+        dialect: 'pg';
     }>;
 }
-export declare const singlestoreTable: SingleStoreTableFn;
-export declare function singlestoreTableCreator(customizeTableName: (name: string) => string): SingleStoreTableFn;
+export declare const pgTable: PgTableFn;
+export declare function pgTableCreator(customizeTableName: (name: string) => string): PgTableFn;

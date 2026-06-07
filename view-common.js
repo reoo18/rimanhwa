@@ -1,5 +1,5 @@
-const SingleStoreViewConfig = Symbol.for("drizzle:SingleStoreViewConfig");
+const PgViewConfig = Symbol.for("drizzle:PgViewConfig");
 export {
-  SingleStoreViewConfig
+  PgViewConfig
 };
 //# sourceMappingURL=view-common.js.map

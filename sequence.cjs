@@ -16,18 +16,37 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var view_base_exports = {};
-__export(view_base_exports, {
-  PgViewBase: () => PgViewBase
+var sequence_exports = {};
+__export(sequence_exports, {
+  PgSequence: () => PgSequence,
+  isPgSequence: () => isPgSequence,
+  pgSequence: () => pgSequence,
+  pgSequenceWithSchema: () => pgSequenceWithSchema
 });
-module.exports = __toCommonJS(view_base_exports);
+module.exports = __toCommonJS(sequence_exports);
 var import_entity = require("../entity.cjs");
-var import_sql = require("../sql/sql.cjs");
-class PgViewBase extends import_sql.View {
-  static [import_entity.entityKind] = "PgViewBase";
+class PgSequence {
+  constructor(seqName, seqOptions, schema) {
+    this.seqName = seqName;
+    this.seqOptions = seqOptions;
+    this.schema = schema;
+  }
+  static [import_entity.entityKind] = "PgSequence";
+}
+function pgSequence(name, options) {
+  return pgSequenceWithSchema(name, options, void 0);
+}
+function pgSequenceWithSchema(name, options, schema) {
+  return new PgSequence(name, options, schema);
+}
+function isPgSequence(obj) {
+  return (0, import_entity.is)(obj, PgSequence);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  PgViewBase
+  PgSequence,
+  isPgSequence,
+  pgSequence,
+  pgSequenceWithSchema
 });
-//# sourceMappingURL=view-base.cjs.map
+//# sourceMappingURL=sequence.cjs.map

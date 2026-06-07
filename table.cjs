@@ -18,56 +18,83 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var table_exports = {};
 __export(table_exports, {
-  SingleStoreTable: () => SingleStoreTable,
-  singlestoreTable: () => singlestoreTable,
-  singlestoreTableCreator: () => singlestoreTableCreator,
-  singlestoreTableWithSchema: () => singlestoreTableWithSchema
+  EnableRLS: () => EnableRLS,
+  InlineForeignKeys: () => InlineForeignKeys,
+  PgTable: () => PgTable,
+  pgTable: () => pgTable,
+  pgTableCreator: () => pgTableCreator,
+  pgTableWithSchema: () => pgTableWithSchema
 });
 module.exports = __toCommonJS(table_exports);
 var import_entity = require("../entity.cjs");
 var import_table = require("../table.cjs");
 var import_all = require("./columns/all.cjs");
-class SingleStoreTable extends import_table.Table {
-  static [import_entity.entityKind] = "SingleStoreTable";
+const InlineForeignKeys = Symbol.for("drizzle:PgInlineForeignKeys");
+const EnableRLS = Symbol.for("drizzle:EnableRLS");
+class PgTable extends import_table.Table {
+  static [import_entity.entityKind] = "PgTable";
   /** @internal */
-  static Symbol = Object.assign({}, import_table.Table.Symbol, {});
+  static Symbol = Object.assign({}, import_table.Table.Symbol, {
+    InlineForeignKeys,
+    EnableRLS
+  });
+  /**@internal */
+  [InlineForeignKeys] = [];
   /** @internal */
-  [import_table.Table.Symbol.Columns];
+  [EnableRLS] = false;
   /** @internal */
   [import_table.Table.Symbol.ExtraConfigBuilder] = void 0;
+  /** @internal */
+  [import_table.Table.Symbol.ExtraConfigColumns] = {};
 }
-function singlestoreTableWithSchema(name, columns, extraConfig, schema, baseName = name) {
-  const rawTable = new SingleStoreTable(name, schema, baseName);
-  const parsedColumns = typeof columns === "function" ? columns((0, import_all.getSingleStoreColumnBuilders)()) : columns;
+function pgTableWithSchema(name, columns, extraConfig, schema, baseName = name) {
+  const rawTable = new PgTable(name, schema, baseName);
+  const parsedColumns = typeof columns === "function" ? columns((0, import_all.getPgColumnBuilders)()) : columns;
   const builtColumns = Object.fromEntries(
     Object.entries(parsedColumns).map(([name2, colBuilderBase]) => {
       const colBuilder = colBuilderBase;
       colBuilder.setName(name2);
       const column = colBuilder.build(rawTable);
+      rawTable[InlineForeignKeys].push(...colBuilder.buildForeignKeys(column, rawTable));
+      return [name2, column];
+    })
+  );
+  const builtColumnsForExtraConfig = Object.fromEntries(
+    Object.entries(parsedColumns).map(([name2, colBuilderBase]) => {
+      const colBuilder = colBuilderBase;
+      colBuilder.setName(name2);
+      const column = colBuilder.buildExtraConfigColumn(rawTable);
       return [name2, column];
     })
   );
   const table = Object.assign(rawTable, builtColumns);
   table[import_table.Table.Symbol.Columns] = builtColumns;
-  table[import_table.Table.Symbol.ExtraConfigColumns] = builtColumns;
+  table[import_table.Table.Symbol.ExtraConfigColumns] = builtColumnsForExtraConfig;
   if (extraConfig) {
-    table[SingleStoreTable.Symbol.ExtraConfigBuilder] = extraConfig;
+    table[PgTable.Symbol.ExtraConfigBuilder] = extraConfig;
   }
-  return table;
+  return Object.assign(table, {
+    enableRLS: () => {
+      table[PgTable.Symbol.EnableRLS] = true;
+      return table;
+    }
+  });
 }
-const singlestoreTable = (name, columns, extraConfig) => {
-  return singlestoreTableWithSchema(name, columns, extraConfig, void 0, name);
+const pgTable = (name, columns, extraConfig) => {
+  return pgTableWithSchema(name, columns, extraConfig, void 0);
 };
-function singlestoreTableCreator(customizeTableName) {
+function pgTableCreator(customizeTableName) {
   return (name, columns, extraConfig) => {
-    return singlestoreTableWithSchema(customizeTableName(name), columns, extraConfig, void 0, name);
+    return pgTableWithSchema(customizeTableName(name), columns, extraConfig, void 0, name);
   };
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreTable,
-  singlestoreTable,
-  singlestoreTableCreator,
-  singlestoreTableWithSchema
+  EnableRLS,
+  InlineForeignKeys,
+  PgTable,
+  pgTable,
+  pgTableCreator,
+  pgTableWithSchema
 });
 //# sourceMappingURL=table.cjs.map

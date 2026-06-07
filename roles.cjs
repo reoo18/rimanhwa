@@ -16,18 +16,42 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var view_base_exports = {};
-__export(view_base_exports, {
-  PgViewBase: () => PgViewBase
+var roles_exports = {};
+__export(roles_exports, {
+  PgRole: () => PgRole,
+  pgRole: () => pgRole
 });
-module.exports = __toCommonJS(view_base_exports);
+module.exports = __toCommonJS(roles_exports);
 var import_entity = require("../entity.cjs");
-var import_sql = require("../sql/sql.cjs");
-class PgViewBase extends import_sql.View {
-  static [import_entity.entityKind] = "PgViewBase";
+class PgRole {
+  constructor(name, config) {
+    this.name = name;
+    if (config) {
+      this.createDb = config.createDb;
+      this.createRole = config.createRole;
+      this.inherit = config.inherit;
+    }
+  }
+  static [import_entity.entityKind] = "PgRole";
+  /** @internal */
+  _existing;
+  /** @internal */
+  createDb;
+  /** @internal */
+  createRole;
+  /** @internal */
+  inherit;
+  existing() {
+    this._existing = true;
+    return this;
+  }
+}
+function pgRole(name, config) {
+  return new PgRole(name, config);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  PgViewBase
+  PgRole,
+  pgRole
 });
-//# sourceMappingURL=view-base.cjs.map
+//# sourceMappingURL=roles.cjs.map
