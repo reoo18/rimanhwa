@@ -25,25 +25,29 @@ var import_migrator = require("../migrator.cjs");
 var import_sql = require("../sql/sql.cjs");
 async function migrate(db, callback, config) {
   const migrations = (0, import_migrator.readMigrationFiles)(config);
-  const migrationsTable = typeof config === "string" ? "__drizzle_migrations" : config.migrationsTable ?? "__drizzle_migrations";
+  const migrationsTable = config.migrationsTable ?? "__drizzle_migrations";
   const migrationTableCreate = import_sql.sql`
-		CREATE TABLE IF NOT EXISTS ${import_sql.sql.identifier(migrationsTable)} (
-			id SERIAL PRIMARY KEY,
-			hash text NOT NULL,
-			created_at numeric
+		create table if not exists ${import_sql.sql.identifier(migrationsTable)} (
+			id serial primary key,
+			hash text not null,
+			created_at bigint
 		)
 	`;
-  await db.run(migrationTableCreate);
-  const dbMigrations = await db.values(
-    import_sql.sql`SELECT id, hash, created_at FROM ${import_sql.sql.identifier(migrationsTable)} ORDER BY created_at DESC LIMIT 1`
-  );
-  const lastDbMigration = dbMigrations[0] ?? void 0;
+  await db.execute(migrationTableCreate);
+  const dbMigrations = await db.select({
+    id: import_sql.sql.raw("id"),
+    hash: import_sql.sql.raw("hash"),
+    created_at: import_sql.sql.raw("created_at")
+  }).from(import_sql.sql.identifier(migrationsTable).getSQL()).orderBy(
+    import_sql.sql.raw("created_at desc")
+  ).limit(1);
+  const lastDbMigration = dbMigrations[0];
   const queriesToRun = [];
   for (const migration of migrations) {
-    if (!lastDbMigration || Number(lastDbMigration[2]) < migration.folderMillis) {
+    if (!lastDbMigration || Number(lastDbMigration.created_at) < migration.folderMillis) {
       queriesToRun.push(
         ...migration.sql,
-        `INSERT INTO \`${migrationsTable}\` ("hash", "created_at") VALUES('${migration.hash}', '${migration.folderMillis}')`
+        `insert into ${import_sql.sql.identifier(migrationsTable).value} (\`hash\`, \`created_at\`) values('${migration.hash}', '${migration.folderMillis}')`
       );
     }
   }

@@ -1,58 +1,42 @@
 import { entityKind } from "../entity.js";
 import { DefaultLogger } from "../logger.js";
-import { createTableRelationsHelpers, extractTablesRelationalConfig } from "../relations.js";
-import { BaseSQLiteDatabase } from "../sqlite-core/db.js";
-import { SQLiteAsyncDialect } from "../sqlite-core/dialect.js";
-import { SQLiteRemoteSession } from "./session.js";
-class SqliteRemoteDatabase extends BaseSQLiteDatabase {
-  static [entityKind] = "SqliteRemoteDatabase";
-  async batch(batch) {
-    return this.session.batch(batch);
-  }
+import {
+  createTableRelationsHelpers,
+  extractTablesRelationalConfig
+} from "../relations.js";
+import { SingleStoreDatabase } from "../singlestore-core/db.js";
+import { SingleStoreDialect } from "../singlestore-core/dialect.js";
+import {
+  SingleStoreRemoteSession
+} from "./session.js";
+class SingleStoreRemoteDatabase extends SingleStoreDatabase {
+  static [entityKind] = "SingleStoreRemoteDatabase";
 }
-function drizzle(callback, batchCallback, config) {
-  const dialect = new SQLiteAsyncDialect({ casing: config?.casing });
+function drizzle(callback, config = {}) {
+  const dialect = new SingleStoreDialect({ casing: config.casing });
   let logger;
-  let cache;
-  let _batchCallback;
-  let _config = {};
-  if (batchCallback) {
-    if (typeof batchCallback === "function") {
-      _batchCallback = batchCallback;
-      _config = config ?? {};
-    } else {
-      _batchCallback = void 0;
-      _config = batchCallback;
-    }
-    if (_config.logger === true) {
-      logger = new DefaultLogger();
-    } else if (_config.logger !== false) {
-      logger = _config.logger;
-      cache = _config.cache;
-    }
+  if (config.logger === true) {
+    logger = new DefaultLogger();
+  } else if (config.logger !== false) {
+    logger = config.logger;
   }
   let schema;
-  if (_config.schema) {
+  if (config.schema) {
     const tablesConfig = extractTablesRelationalConfig(
-      _config.schema,
+      config.schema,
       createTableRelationsHelpers
     );
     schema = {
-      fullSchema: _config.schema,
+      fullSchema: config.schema,
       schema: tablesConfig.tables,
       tableNamesMap: tablesConfig.tableNamesMap
     };
   }
-  const session = new SQLiteRemoteSession(callback, dialect, schema, _batchCallback, { logger, cache });
-  const db = new SqliteRemoteDatabase("async", dialect, session, schema);
-  db.$cache = cache;
-  if (db.$cache) {
-    db.$cache["invalidate"] = cache?.onMutate;
-  }
-  return db;
+  const session = new SingleStoreRemoteSession(callback, dialect, schema, { logger });
+  return new SingleStoreRemoteDatabase(dialect, session, schema);
 }
 export {
-  SqliteRemoteDatabase,
+  SingleStoreRemoteDatabase,
   drizzle
 };
 //# sourceMappingURL=driver.js.map

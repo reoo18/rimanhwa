@@ -18,66 +18,45 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var driver_exports = {};
 __export(driver_exports, {
-  SqliteRemoteDatabase: () => SqliteRemoteDatabase,
+  SingleStoreRemoteDatabase: () => SingleStoreRemoteDatabase,
   drizzle: () => drizzle
 });
 module.exports = __toCommonJS(driver_exports);
 var import_entity = require("../entity.cjs");
 var import_logger = require("../logger.cjs");
 var import_relations = require("../relations.cjs");
-var import_db = require("../sqlite-core/db.cjs");
-var import_dialect = require("../sqlite-core/dialect.cjs");
+var import_db = require("../singlestore-core/db.cjs");
+var import_dialect = require("../singlestore-core/dialect.cjs");
 var import_session = require("./session.cjs");
-class SqliteRemoteDatabase extends import_db.BaseSQLiteDatabase {
-  static [import_entity.entityKind] = "SqliteRemoteDatabase";
-  async batch(batch) {
-    return this.session.batch(batch);
-  }
+class SingleStoreRemoteDatabase extends import_db.SingleStoreDatabase {
+  static [import_entity.entityKind] = "SingleStoreRemoteDatabase";
 }
-function drizzle(callback, batchCallback, config) {
-  const dialect = new import_dialect.SQLiteAsyncDialect({ casing: config?.casing });
+function drizzle(callback, config = {}) {
+  const dialect = new import_dialect.SingleStoreDialect({ casing: config.casing });
   let logger;
-  let cache;
-  let _batchCallback;
-  let _config = {};
-  if (batchCallback) {
-    if (typeof batchCallback === "function") {
-      _batchCallback = batchCallback;
-      _config = config ?? {};
-    } else {
-      _batchCallback = void 0;
-      _config = batchCallback;
-    }
-    if (_config.logger === true) {
-      logger = new import_logger.DefaultLogger();
-    } else if (_config.logger !== false) {
-      logger = _config.logger;
-      cache = _config.cache;
-    }
+  if (config.logger === true) {
+    logger = new import_logger.DefaultLogger();
+  } else if (config.logger !== false) {
+    logger = config.logger;
   }
   let schema;
-  if (_config.schema) {
+  if (config.schema) {
     const tablesConfig = (0, import_relations.extractTablesRelationalConfig)(
-      _config.schema,
+      config.schema,
       import_relations.createTableRelationsHelpers
     );
     schema = {
-      fullSchema: _config.schema,
+      fullSchema: config.schema,
       schema: tablesConfig.tables,
       tableNamesMap: tablesConfig.tableNamesMap
     };
   }
-  const session = new import_session.SQLiteRemoteSession(callback, dialect, schema, _batchCallback, { logger, cache });
-  const db = new SqliteRemoteDatabase("async", dialect, session, schema);
-  db.$cache = cache;
-  if (db.$cache) {
-    db.$cache["invalidate"] = cache?.onMutate;
-  }
-  return db;
+  const session = new import_session.SingleStoreRemoteSession(callback, dialect, schema, { logger });
+  return new SingleStoreRemoteDatabase(dialect, session, schema);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SqliteRemoteDatabase,
+  SingleStoreRemoteDatabase,
   drizzle
 });
 //# sourceMappingURL=driver.cjs.map

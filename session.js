@@ -1,206 +1,101 @@
-import { hashQuery, NoopCache } from "../cache/core/cache.js";
+import { Column } from "../column.js";
 import { entityKind, is } from "../entity.js";
-import { DrizzleError, DrizzleQueryError, TransactionRollbackError } from "../errors.js";
-import { QueryPromise } from "../query-promise.js";
-import { BaseSQLiteDatabase } from "./db.js";
-class ExecuteResultSync extends QueryPromise {
-  constructor(resultCb) {
-    super();
-    this.resultCb = resultCb;
+import { NoopLogger } from "../logger.js";
+import { SingleStoreTransaction } from "../singlestore-core/index.js";
+import { SingleStorePreparedQuery as PreparedQueryBase, SingleStoreSession } from "../singlestore-core/session.js";
+import { fillPlaceholders } from "../sql/sql.js";
+import { mapResultRow } from "../utils.js";
+class SingleStoreRemoteSession extends SingleStoreSession {
+  constructor(client, dialect, schema, options) {
+    super(dialect);
+    this.client = client;
+    this.schema = schema;
+    this.logger = options.logger ?? new NoopLogger();
   }
-  static [entityKind] = "ExecuteResultSync";
-  async execute() {
-    return this.resultCb();
-  }
-  sync() {
-    return this.resultCb();
-  }
-}
-class SQLitePreparedQuery {
-  constructor(mode, executeMethod, query, cache, queryMetadata, cacheConfig) {
-    this.mode = mode;
-    this.executeMethod = executeMethod;
-    this.query = query;
-    this.cache = cache;
-    this.queryMetadata = queryMetadata;
-    this.cacheConfig = cacheConfig;
-    if (cache && cache.strategy() === "all" && cacheConfig === void 0) {
-      this.cacheConfig = { enable: true, autoInvalidate: true };
-    }
-    if (!this.cacheConfig?.enable) {
-      this.cacheConfig = void 0;
-    }
-  }
-  static [entityKind] = "PreparedQuery";
-  /** @internal */
-  joinsNotNullableMap;
-  /** @internal */
-  async queryWithCache(queryString, params, query) {
-    if (this.cache === void 0 || is(this.cache, NoopCache) || this.queryMetadata === void 0) {
-      try {
-        return await query();
-      } catch (e) {
-        throw new DrizzleQueryError(queryString, params, e);
-      }
-    }
-    if (this.cacheConfig && !this.cacheConfig.enable) {
-      try {
-        return await query();
-      } catch (e) {
-        throw new DrizzleQueryError(queryString, params, e);
-      }
-    }
-    if ((this.queryMetadata.type === "insert" || this.queryMetadata.type === "update" || this.queryMetadata.type === "delete") && this.queryMetadata.tables.length > 0) {
-      try {
-        const [res] = await Promise.all([
-          query(),
-          this.cache.onMutate({ tables: this.queryMetadata.tables })
-        ]);
-        return res;
-      } catch (e) {
-        throw new DrizzleQueryError(queryString, params, e);
-      }
-    }
-    if (!this.cacheConfig) {
-      try {
-        return await query();
-      } catch (e) {
-        throw new DrizzleQueryError(queryString, params, e);
-      }
-    }
-    if (this.queryMetadata.type === "select") {
-      const fromCache = await this.cache.get(
-        this.cacheConfig.tag ?? (await hashQuery(queryString, params)),
-        this.queryMetadata.tables,
-        this.cacheConfig.tag !== void 0,
-        this.cacheConfig.autoInvalidate
-      );
-      if (fromCache === void 0) {
-        let result;
-        try {
-          result = await query();
-        } catch (e) {
-          throw new DrizzleQueryError(queryString, params, e);
-        }
-        await this.cache.put(
-          this.cacheConfig.tag ?? (await hashQuery(queryString, params)),
-          result,
-          // make sure we send tables that were used in a query only if user wants to invalidate it on each write
-          this.cacheConfig.autoInvalidate ? this.queryMetadata.tables : [],
-          this.cacheConfig.tag !== void 0,
-          this.cacheConfig.config
-        );
-        return result;
-      }
-      return fromCache;
-    }
-    try {
-      return await query();
-    } catch (e) {
-      throw new DrizzleQueryError(queryString, params, e);
-    }
-  }
-  getQuery() {
-    return this.query;
-  }
-  mapRunResult(result, _isFromBatch) {
-    return result;
-  }
-  mapAllResult(_result, _isFromBatch) {
-    throw new Error("Not implemented");
-  }
-  mapGetResult(_result, _isFromBatch) {
-    throw new Error("Not implemented");
-  }
-  execute(placeholderValues) {
-    if (this.mode === "async") {
-      return this[this.executeMethod](placeholderValues);
-    }
-    return new ExecuteResultSync(() => this[this.executeMethod](placeholderValues));
-  }
-  mapResult(response, isFromBatch) {
-    switch (this.executeMethod) {
-      case "run": {
-        return this.mapRunResult(response, isFromBatch);
-      }
-      case "all": {
-        return this.mapAllResult(response, isFromBatch);
-      }
-      case "get": {
-        return this.mapGetResult(response, isFromBatch);
-      }
-    }
-  }
-}
-class SQLiteSession {
-  constructor(dialect) {
-    this.dialect = dialect;
-  }
-  static [entityKind] = "SQLiteSession";
-  prepareOneTimeQuery(query, fields, executeMethod, isResponseInArrayMode, customResultMapper, queryMetadata, cacheConfig) {
-    return this.prepareQuery(
-      query,
+  static [entityKind] = "SingleStoreRemoteSession";
+  logger;
+  prepareQuery(query, fields, customResultMapper, generatedIds, returningIds) {
+    return new PreparedQuery(
+      this.client,
+      query.sql,
+      query.params,
+      this.logger,
       fields,
-      executeMethod,
-      isResponseInArrayMode,
       customResultMapper,
-      queryMetadata,
-      cacheConfig
+      generatedIds,
+      returningIds
     );
   }
-  run(query) {
-    const staticQuery = this.dialect.sqlToQuery(query);
-    try {
-      return this.prepareOneTimeQuery(staticQuery, void 0, "run", false).run();
-    } catch (err) {
-      throw new DrizzleError({ cause: err, message: `Failed to run the query '${staticQuery.sql}'` });
-    }
-  }
-  /** @internal */
-  extractRawRunValueFromBatchResult(result) {
-    return result;
-  }
   all(query) {
-    return this.prepareOneTimeQuery(this.dialect.sqlToQuery(query), void 0, "run", false).all();
+    const querySql = this.dialect.sqlToQuery(query);
+    this.logger.logQuery(querySql.sql, querySql.params);
+    return this.client(querySql.sql, querySql.params, "all").then(({ rows }) => rows);
   }
-  /** @internal */
-  extractRawAllValueFromBatchResult(_result) {
-    throw new Error("Not implemented");
-  }
-  get(query) {
-    return this.prepareOneTimeQuery(this.dialect.sqlToQuery(query), void 0, "run", false).get();
-  }
-  /** @internal */
-  extractRawGetValueFromBatchResult(_result) {
-    throw new Error("Not implemented");
-  }
-  values(query) {
-    return this.prepareOneTimeQuery(this.dialect.sqlToQuery(query), void 0, "run", false).values();
-  }
-  async count(sql) {
-    const result = await this.values(sql);
-    return result[0][0];
-  }
-  /** @internal */
-  extractRawValuesValueFromBatchResult(_result) {
-    throw new Error("Not implemented");
+  async transaction(_transaction, _config) {
+    throw new Error("Transactions are not supported by the SingleStore Proxy driver");
   }
 }
-class SQLiteTransaction extends BaseSQLiteDatabase {
-  constructor(resultType, dialect, session, schema, nestedIndex = 0) {
-    super(resultType, dialect, session, schema);
-    this.schema = schema;
-    this.nestedIndex = nestedIndex;
+class SingleStoreProxyTransaction extends SingleStoreTransaction {
+  static [entityKind] = "SingleStoreProxyTransaction";
+  async transaction(_transaction) {
+    throw new Error("Transactions are not supported by the SingleStore Proxy driver");
   }
-  static [entityKind] = "SQLiteTransaction";
-  rollback() {
-    throw new TransactionRollbackError();
+}
+class PreparedQuery extends PreparedQueryBase {
+  constructor(client, queryString, params, logger, fields, customResultMapper, generatedIds, returningIds) {
+    super();
+    this.client = client;
+    this.queryString = queryString;
+    this.params = params;
+    this.logger = logger;
+    this.fields = fields;
+    this.customResultMapper = customResultMapper;
+    this.generatedIds = generatedIds;
+    this.returningIds = returningIds;
+  }
+  static [entityKind] = "SingleStoreProxyPreparedQuery";
+  async execute(placeholderValues = {}) {
+    const params = fillPlaceholders(this.params, placeholderValues);
+    const { fields, client, queryString, logger, joinsNotNullableMap, customResultMapper, returningIds, generatedIds } = this;
+    logger.logQuery(queryString, params);
+    if (!fields && !customResultMapper) {
+      const { rows: data } = await client(queryString, params, "execute");
+      const insertId = data[0].insertId;
+      const affectedRows = data[0].affectedRows;
+      if (returningIds) {
+        const returningResponse = [];
+        let j = 0;
+        for (let i = insertId; i < insertId + affectedRows; i++) {
+          for (const column of returningIds) {
+            const key = returningIds[0].path[0];
+            if (is(column.field, Column)) {
+              if (column.field.primary && column.field.autoIncrement) {
+                returningResponse.push({ [key]: i });
+              }
+              if (column.field.defaultFn && generatedIds) {
+                returningResponse.push({ [key]: generatedIds[j][key] });
+              }
+            }
+          }
+          j++;
+        }
+        return returningResponse;
+      }
+      return data;
+    }
+    const { rows } = await client(queryString, params, "all");
+    if (customResultMapper) {
+      return customResultMapper(rows);
+    }
+    return rows.map((row) => mapResultRow(fields, row, joinsNotNullableMap));
+  }
+  iterator(_placeholderValues = {}) {
+    throw new Error("Streaming is not supported by the SingleStore Proxy driver");
   }
 }
 export {
-  ExecuteResultSync,
-  SQLitePreparedQuery,
-  SQLiteSession,
-  SQLiteTransaction
+  PreparedQuery,
+  SingleStoreProxyTransaction,
+  SingleStoreRemoteSession
 };
 //# sourceMappingURL=session.js.map
