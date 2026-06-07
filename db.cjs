@@ -18,36 +18,52 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var db_exports = {};
 __export(db_exports, {
-  SingleStoreDatabase: () => SingleStoreDatabase,
+  PgDatabase: () => PgDatabase,
   withReplicas: () => withReplicas
 });
 module.exports = __toCommonJS(db_exports);
 var import_entity = require("../entity.cjs");
+var import_query_builders = require("./query-builders/index.cjs");
 var import_selection_proxy = require("../selection-proxy.cjs");
 var import_sql = require("../sql/sql.cjs");
 var import_subquery = require("../subquery.cjs");
 var import_count = require("./query-builders/count.cjs");
-var import_query_builders = require("./query-builders/index.cjs");
-class SingleStoreDatabase {
+var import_query = require("./query-builders/query.cjs");
+var import_raw = require("./query-builders/raw.cjs");
+var import_refresh_materialized_view = require("./query-builders/refresh-materialized-view.cjs");
+class PgDatabase {
   constructor(dialect, session, schema) {
     this.dialect = dialect;
     this.session = session;
     this._ = schema ? {
       schema: schema.schema,
       fullSchema: schema.fullSchema,
-      tableNamesMap: schema.tableNamesMap
+      tableNamesMap: schema.tableNamesMap,
+      session
     } : {
       schema: void 0,
       fullSchema: {},
-      tableNamesMap: {}
+      tableNamesMap: {},
+      session
     };
     this.query = {};
+    if (this._.schema) {
+      for (const [tableName, columns] of Object.entries(this._.schema)) {
+        this.query[tableName] = new import_query.RelationalQueryBuilder(
+          schema.fullSchema,
+          this._.schema,
+          this._.tableNamesMap,
+          schema.fullSchema[tableName],
+          columns,
+          dialect,
+          session
+        );
+      }
+    }
     this.$cache = { invalidate: async (_params) => {
     } };
   }
-  static [import_entity.entityKind] = "SingleStoreDatabase";
-  // We are waiting for SingleStore support for `json_array` function
-  /**@inrernal */
+  static [import_entity.entityKind] = "PgDatabase";
   query;
   /**
    * Creates a subquery that defines a temporary named result set as a CTE.
@@ -100,8 +116,9 @@ class SingleStoreDatabase {
     return { as };
   };
   $count(source, filters) {
-    return new import_count.SingleStoreCountBuilder({ source, filters, session: this.session });
+    return new import_count.PgCountBuilder({ source, filters, session: this.session });
   }
+  $cache;
   /**
    * Incorporates a previously defined CTE (using `$with`) into the main query.
    *
@@ -124,7 +141,7 @@ class SingleStoreDatabase {
   with(...queries) {
     const self = this;
     function select(fields) {
-      return new import_query_builders.SingleStoreSelectBuilder({
+      return new import_query_builders.PgSelectBuilder({
         fields: fields ?? void 0,
         session: self.session,
         dialect: self.dialect,
@@ -132,7 +149,7 @@ class SingleStoreDatabase {
       });
     }
     function selectDistinct(fields) {
-      return new import_query_builders.SingleStoreSelectBuilder({
+      return new import_query_builders.PgSelectBuilder({
         fields: fields ?? void 0,
         session: self.session,
         dialect: self.dialect,
@@ -140,23 +157,47 @@ class SingleStoreDatabase {
         distinct: true
       });
     }
+    function selectDistinctOn(on, fields) {
+      return new import_query_builders.PgSelectBuilder({
+        fields: fields ?? void 0,
+        session: self.session,
+        dialect: self.dialect,
+        withList: queries,
+        distinct: { on }
+      });
+    }
     function update(table) {
-      return new import_query_builders.SingleStoreUpdateBuilder(table, self.session, self.dialect, queries);
+      return new import_query_builders.PgUpdateBuilder(table, self.session, self.dialect, queries);
+    }
+    function insert(table) {
+      return new import_query_builders.PgInsertBuilder(table, self.session, self.dialect, queries);
     }
     function delete_(table) {
-      return new import_query_builders.SingleStoreDeleteBase(table, self.session, self.dialect, queries);
+      return new import_query_builders.PgDeleteBase(table, self.session, self.dialect, queries);
     }
-    return { select, selectDistinct, update, delete: delete_ };
+    return { select, selectDistinct, selectDistinctOn, update, insert, delete: delete_ };
   }
   select(fields) {
-    return new import_query_builders.SingleStoreSelectBuilder({ fields: fields ?? void 0, session: this.session, dialect: this.dialect });
+    return new import_query_builders.PgSelectBuilder({
+      fields: fields ?? void 0,
+      session: this.session,
+      dialect: this.dialect
+    });
   }
   selectDistinct(fields) {
-    return new import_query_builders.SingleStoreSelectBuilder({
+    return new import_query_builders.PgSelectBuilder({
       fields: fields ?? void 0,
       session: this.session,
       dialect: this.dialect,
       distinct: true
+    });
+  }
+  selectDistinctOn(on, fields) {
+    return new import_query_builders.PgSelectBuilder({
+      fields: fields ?? void 0,
+      session: this.session,
+      dialect: this.dialect,
+      distinct: { on }
     });
   }
   /**
@@ -178,10 +219,16 @@ class SingleStoreDatabase {
    *
    * // Update rows with filters and conditions
    * await db.update(cars).set({ color: 'red' }).where(eq(cars.brand, 'BMW'));
+   *
+   * // Update with returning clause
+   * const updatedCar: Car[] = await db.update(cars)
+   *   .set({ color: 'red' })
+   *   .where(eq(cars.id, 1))
+   *   .returning();
    * ```
    */
   update(table) {
-    return new import_query_builders.SingleStoreUpdateBuilder(table, this.session, this.dialect);
+    return new import_query_builders.PgUpdateBuilder(table, this.session, this.dialect);
   }
   /**
    * Creates an insert query.
@@ -200,10 +247,15 @@ class SingleStoreDatabase {
    *
    * // Insert multiple rows
    * await db.insert(cars).values([{ brand: 'BMW' }, { brand: 'Porsche' }]);
+   *
+   * // Insert with returning clause
+   * const insertedCar: Car[] = await db.insert(cars)
+   *   .values({ brand: 'BMW' })
+   *   .returning();
    * ```
    */
   insert(table) {
-    return new import_query_builders.SingleStoreInsertBuilder(table, this.session, this.dialect);
+    return new import_query_builders.PgInsertBuilder(table, this.session, this.dialect);
   }
   /**
    * Creates a delete query.
@@ -222,15 +274,36 @@ class SingleStoreDatabase {
    *
    * // Delete rows with filters and conditions
    * await db.delete(cars).where(eq(cars.color, 'green'));
+   *
+   * // Delete with returning clause
+   * const deletedCar: Car[] = await db.delete(cars)
+   *   .where(eq(cars.id, 1))
+   *   .returning();
    * ```
    */
   delete(table) {
-    return new import_query_builders.SingleStoreDeleteBase(table, this.session, this.dialect);
+    return new import_query_builders.PgDeleteBase(table, this.session, this.dialect);
   }
+  refreshMaterializedView(view) {
+    return new import_refresh_materialized_view.PgRefreshMaterializedView(view, this.session, this.dialect);
+  }
+  authToken;
   execute(query) {
-    return this.session.execute(typeof query === "string" ? import_sql.sql.raw(query) : query.getSQL());
+    const sequel = typeof query === "string" ? import_sql.sql.raw(query) : query.getSQL();
+    const builtQuery = this.dialect.sqlToQuery(sequel);
+    const prepared = this.session.prepareQuery(
+      builtQuery,
+      void 0,
+      void 0,
+      false
+    );
+    return new import_raw.PgRaw(
+      () => prepared.execute(void 0, this.authToken),
+      sequel,
+      builtQuery,
+      (result) => prepared.mapResult(result, true)
+    );
   }
-  $cache;
   transaction(transaction, config) {
     return this.session.transaction(transaction, config);
   }
@@ -238,13 +311,16 @@ class SingleStoreDatabase {
 const withReplicas = (primary, replicas, getReplica = () => replicas[Math.floor(Math.random() * replicas.length)]) => {
   const select = (...args) => getReplica(replicas).select(...args);
   const selectDistinct = (...args) => getReplica(replicas).selectDistinct(...args);
+  const selectDistinctOn = (...args) => getReplica(replicas).selectDistinctOn(...args);
   const $count = (...args) => getReplica(replicas).$count(...args);
-  const $with = (...args) => getReplica(replicas).with(...args);
+  const _with = (...args) => getReplica(replicas).with(...args);
+  const $with = (arg) => getReplica(replicas).$with(arg);
   const update = (...args) => primary.update(...args);
   const insert = (...args) => primary.insert(...args);
   const $delete = (...args) => primary.delete(...args);
   const execute = (...args) => primary.execute(...args);
   const transaction = (...args) => primary.transaction(...args);
+  const refreshMaterializedView = (...args) => primary.refreshMaterializedView(...args);
   return {
     ...primary,
     update,
@@ -252,12 +328,15 @@ const withReplicas = (primary, replicas, getReplica = () => replicas[Math.floor(
     delete: $delete,
     execute,
     transaction,
+    refreshMaterializedView,
     $primary: primary,
     $replicas: replicas,
     select,
     selectDistinct,
+    selectDistinctOn,
     $count,
-    with: $with,
+    $with,
+    with: _with,
     get query() {
       return getReplica(replicas).query;
     }
@@ -265,7 +344,7 @@ const withReplicas = (primary, replicas, getReplica = () => replicas[Math.floor(
 };
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreDatabase,
+  PgDatabase,
   withReplicas
 });
 //# sourceMappingURL=db.cjs.map

@@ -1,31 +1,38 @@
-import type { ResultSetHeader } from 'mysql2/promise';
 import type { Cache } from "../cache/core/cache.cjs";
 import { entityKind } from "../entity.cjs";
+import type { PgDialect } from "./dialect.cjs";
+import { PgDeleteBase, PgInsertBuilder, PgSelectBuilder, PgUpdateBuilder } from "./query-builders/index.cjs";
+import type { PgQueryResultHKT, PgQueryResultKind, PgSession, PgTransaction, PgTransactionConfig } from "./session.cjs";
+import type { PgTable } from "./table.cjs";
 import type { ExtractTablesWithRelations, RelationalSchemaConfig, TablesRelationalConfig } from "../relations.cjs";
-import type { SingleStoreDriverDatabase } from "../singlestore/driver.cjs";
 import { type SQL, type SQLWrapper } from "../sql/sql.cjs";
 import { WithSubquery } from "../subquery.cjs";
-import type { SingleStoreDialect } from "./dialect.cjs";
-import { SingleStoreCountBuilder } from "./query-builders/count.cjs";
-import { SingleStoreDeleteBase, SingleStoreInsertBuilder, SingleStoreSelectBuilder, SingleStoreUpdateBuilder } from "./query-builders/index.cjs";
+import type { DrizzleTypeError, NeonAuthToken } from "../utils.cjs";
+import type { PgColumn } from "./columns/index.cjs";
+import { PgCountBuilder } from "./query-builders/count.cjs";
+import { RelationalQueryBuilder } from "./query-builders/query.cjs";
+import { PgRaw } from "./query-builders/raw.cjs";
+import { PgRefreshMaterializedView } from "./query-builders/refresh-materialized-view.cjs";
 import type { SelectedFields } from "./query-builders/select.types.cjs";
-import type { PreparedQueryHKTBase, SingleStoreQueryResultHKT, SingleStoreQueryResultKind, SingleStoreSession, SingleStoreTransaction, SingleStoreTransactionConfig } from "./session.cjs";
 import type { WithBuilder } from "./subquery.cjs";
-import type { SingleStoreTable } from "./table.cjs";
-export declare class SingleStoreDatabase<TQueryResult extends SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase, TFullSchema extends Record<string, unknown> = {}, TSchema extends TablesRelationalConfig = ExtractTablesWithRelations<TFullSchema>> {
+import type { PgViewBase } from "./view-base.cjs";
+import type { PgMaterializedView } from "./view.cjs";
+export declare class PgDatabase<TQueryResult extends PgQueryResultHKT, TFullSchema extends Record<string, unknown> = Record<string, never>, TSchema extends TablesRelationalConfig = ExtractTablesWithRelations<TFullSchema>> {
     static readonly [entityKind]: string;
     readonly _: {
         readonly schema: TSchema | undefined;
         readonly fullSchema: TFullSchema;
         readonly tableNamesMap: Record<string, string>;
+        readonly session: PgSession<TQueryResult, TFullSchema, TSchema>;
     };
-    /**@inrernal */
-    query: unknown;
+    query: TFullSchema extends Record<string, never> ? DrizzleTypeError<'Seems like the schema generic is missing - did you forget to add it to your DB type?'> : {
+        [K in keyof TSchema]: RelationalQueryBuilder<TSchema, TSchema[K]>;
+    };
     constructor(
     /** @internal */
-    dialect: SingleStoreDialect, 
+    dialect: PgDialect, 
     /** @internal */
-    session: SingleStoreSession<any, any, any, any>, schema: RelationalSchemaConfig<TSchema> | undefined);
+    session: PgSession<any, any, any>, schema: RelationalSchemaConfig<TSchema> | undefined);
     /**
      * Creates a subquery that defines a temporary named result set as a CTE.
      *
@@ -59,8 +66,10 @@ export declare class SingleStoreDatabase<TQueryResult extends SingleStoreQueryRe
      * ```
      */
     $with: WithBuilder;
-    $count(source: SingleStoreTable | SQL | SQLWrapper, // SingleStoreViewBase |
-    filters?: SQL<unknown>): SingleStoreCountBuilder<SingleStoreSession<any, any, any, any>>;
+    $count(source: PgTable | PgViewBase | SQL | SQLWrapper, filters?: SQL<unknown>): PgCountBuilder<PgSession<any, any, any>>;
+    $cache: {
+        invalidate: Cache['onMutate'];
+    };
     /**
      * Incorporates a previously defined CTE (using `$with`) into the main query.
      *
@@ -82,15 +91,20 @@ export declare class SingleStoreDatabase<TQueryResult extends SingleStoreQueryRe
      */
     with(...queries: WithSubquery[]): {
         select: {
-            (): SingleStoreSelectBuilder<undefined, TPreparedQueryHKT>;
-            <TSelection extends SelectedFields>(fields: TSelection): SingleStoreSelectBuilder<TSelection, TPreparedQueryHKT>;
+            (): PgSelectBuilder<undefined>;
+            <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection>;
         };
         selectDistinct: {
-            (): SingleStoreSelectBuilder<undefined, TPreparedQueryHKT>;
-            <TSelection extends SelectedFields>(fields: TSelection): SingleStoreSelectBuilder<TSelection, TPreparedQueryHKT>;
+            (): PgSelectBuilder<undefined>;
+            <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection>;
         };
-        update: <TTable extends SingleStoreTable>(table: TTable) => SingleStoreUpdateBuilder<TTable, TQueryResult, TPreparedQueryHKT>;
-        delete: <TTable extends SingleStoreTable>(table: TTable) => SingleStoreDeleteBase<TTable, TQueryResult, TPreparedQueryHKT>;
+        selectDistinctOn: {
+            (on: (PgColumn | SQLWrapper)[]): PgSelectBuilder<undefined>;
+            <TSelection extends SelectedFields>(on: (PgColumn | SQLWrapper)[], fields: TSelection): PgSelectBuilder<TSelection>;
+        };
+        update: <TTable extends PgTable>(table: TTable) => PgUpdateBuilder<TTable, TQueryResult>;
+        insert: <TTable extends PgTable>(table: TTable) => PgInsertBuilder<TTable, TQueryResult>;
+        delete: <TTable extends PgTable>(table: TTable) => PgDeleteBase<TTable, TQueryResult>;
     };
     /**
      * Creates a select query.
@@ -128,8 +142,8 @@ export declare class SingleStoreDatabase<TQueryResult extends SingleStoreQueryRe
      *   .from(cars);
      * ```
      */
-    select(): SingleStoreSelectBuilder<undefined, TPreparedQueryHKT>;
-    select<TSelection extends SelectedFields>(fields: TSelection): SingleStoreSelectBuilder<TSelection, TPreparedQueryHKT>;
+    select(): PgSelectBuilder<undefined>;
+    select<TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection>;
     /**
      * Adds `distinct` expression to the select query.
      *
@@ -154,8 +168,35 @@ export declare class SingleStoreDatabase<TQueryResult extends SingleStoreQueryRe
      *   .orderBy(cars.brand);
      * ```
      */
-    selectDistinct(): SingleStoreSelectBuilder<undefined, TPreparedQueryHKT>;
-    selectDistinct<TSelection extends SelectedFields>(fields: TSelection): SingleStoreSelectBuilder<TSelection, TPreparedQueryHKT>;
+    selectDistinct(): PgSelectBuilder<undefined>;
+    selectDistinct<TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection>;
+    /**
+     * Adds `distinct on` expression to the select query.
+     *
+     * Calling this method will specify how the unique rows are determined.
+     *
+     * Use `.from()` method to specify which table to select from.
+     *
+     * See docs: {@link https://orm.drizzle.team/docs/select#distinct}
+     *
+     * @param on The expression defining uniqueness.
+     * @param fields The selection object.
+     *
+     * @example
+     * ```ts
+     * // Select the first row for each unique brand from the 'cars' table
+     * await db.selectDistinctOn([cars.brand])
+     *   .from(cars)
+     *   .orderBy(cars.brand);
+     *
+     * // Selects the first occurrence of each unique car brand along with its color from the 'cars' table
+     * await db.selectDistinctOn([cars.brand], { brand: cars.brand, color: cars.color })
+     *   .from(cars)
+     *   .orderBy(cars.brand, cars.color);
+     * ```
+     */
+    selectDistinctOn(on: (PgColumn | SQLWrapper)[]): PgSelectBuilder<undefined>;
+    selectDistinctOn<TSelection extends SelectedFields>(on: (PgColumn | SQLWrapper)[], fields: TSelection): PgSelectBuilder<TSelection>;
     /**
      * Creates an update query.
      *
@@ -175,9 +216,15 @@ export declare class SingleStoreDatabase<TQueryResult extends SingleStoreQueryRe
      *
      * // Update rows with filters and conditions
      * await db.update(cars).set({ color: 'red' }).where(eq(cars.brand, 'BMW'));
+     *
+     * // Update with returning clause
+     * const updatedCar: Car[] = await db.update(cars)
+     *   .set({ color: 'red' })
+     *   .where(eq(cars.id, 1))
+     *   .returning();
      * ```
      */
-    update<TTable extends SingleStoreTable>(table: TTable): SingleStoreUpdateBuilder<TTable, TQueryResult, TPreparedQueryHKT>;
+    update<TTable extends PgTable>(table: TTable): PgUpdateBuilder<TTable, TQueryResult>;
     /**
      * Creates an insert query.
      *
@@ -195,9 +242,14 @@ export declare class SingleStoreDatabase<TQueryResult extends SingleStoreQueryRe
      *
      * // Insert multiple rows
      * await db.insert(cars).values([{ brand: 'BMW' }, { brand: 'Porsche' }]);
+     *
+     * // Insert with returning clause
+     * const insertedCar: Car[] = await db.insert(cars)
+     *   .values({ brand: 'BMW' })
+     *   .returning();
      * ```
      */
-    insert<TTable extends SingleStoreTable>(table: TTable): SingleStoreInsertBuilder<TTable, TQueryResult, TPreparedQueryHKT>;
+    insert<TTable extends PgTable>(table: TTable): PgInsertBuilder<TTable, TQueryResult>;
     /**
      * Creates a delete query.
      *
@@ -215,19 +267,21 @@ export declare class SingleStoreDatabase<TQueryResult extends SingleStoreQueryRe
      *
      * // Delete rows with filters and conditions
      * await db.delete(cars).where(eq(cars.color, 'green'));
+     *
+     * // Delete with returning clause
+     * const deletedCar: Car[] = await db.delete(cars)
+     *   .where(eq(cars.id, 1))
+     *   .returning();
      * ```
      */
-    delete<TTable extends SingleStoreTable>(table: TTable): SingleStoreDeleteBase<TTable, TQueryResult, TPreparedQueryHKT>;
-    execute<T extends {
-        [column: string]: any;
-    } = ResultSetHeader>(query: SQLWrapper | string): Promise<SingleStoreQueryResultKind<TQueryResult, T>>;
-    $cache: {
-        invalidate: Cache['onMutate'];
-    };
-    transaction<T>(transaction: (tx: SingleStoreTransaction<TQueryResult, TPreparedQueryHKT, TFullSchema, TSchema>, config?: SingleStoreTransactionConfig) => Promise<T>, config?: SingleStoreTransactionConfig): Promise<T>;
+    delete<TTable extends PgTable>(table: TTable): PgDeleteBase<TTable, TQueryResult>;
+    refreshMaterializedView<TView extends PgMaterializedView>(view: TView): PgRefreshMaterializedView<TQueryResult>;
+    protected authToken?: NeonAuthToken;
+    execute<TRow extends Record<string, unknown> = Record<string, unknown>>(query: SQLWrapper | string): PgRaw<PgQueryResultKind<TQueryResult, TRow>>;
+    transaction<T>(transaction: (tx: PgTransaction<TQueryResult, TFullSchema, TSchema>) => Promise<T>, config?: PgTransactionConfig): Promise<T>;
 }
-export type SingleStoreWithReplicas<Q> = Q & {
+export type PgWithReplicas<Q> = Q & {
     $primary: Q;
     $replicas: Q[];
 };
-export declare const withReplicas: <Q extends SingleStoreDriverDatabase>(primary: Q, replicas: [Q, ...Q[]], getReplica?: (replicas: Q[]) => Q) => SingleStoreWithReplicas<Q>;
+export declare const withReplicas: <HKT extends PgQueryResultHKT, TFullSchema extends Record<string, unknown>, TSchema extends TablesRelationalConfig, Q extends PgDatabase<HKT, TFullSchema, TSchema extends Record<string, unknown> ? ExtractTablesWithRelations<TFullSchema> : TSchema>>(primary: Q, replicas: [Q, ...Q[]], getReplica?: (replicas: Q[]) => Q) => PgWithReplicas<Q>;

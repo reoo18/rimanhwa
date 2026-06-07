@@ -1,9 +1,8 @@
-import type { SQL, SQLWrapper } from "../sql/sql.cjs";
-import type { SQLiteColumn } from "./columns/index.cjs";
+import type { PgColumn } from "./columns/index.cjs";
+import type { Placeholder, SQL, SQLWrapper } from "../sql/sql.cjs";
 export * from "../sql/expressions/index.cjs";
-export declare function concat(column: SQLiteColumn | SQL.Aliased, value: string | SQLWrapper): SQL;
-export declare function substring(column: SQLiteColumn | SQL.Aliased, { from, for: _for }: {
-    from?: number | SQLWrapper;
-    for?: number | SQLWrapper;
+export declare function concat(column: PgColumn | SQL.Aliased, value: string | Placeholder | SQLWrapper): SQL;
+export declare function substring(column: PgColumn | SQL.Aliased, { from, for: _for }: {
+    from?: number | Placeholder | SQLWrapper;
+    for?: number | Placeholder | SQLWrapper;
 }): SQL;
-export declare function rowId(): SQL<number>;

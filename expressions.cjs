@@ -20,7 +20,6 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var expressions_exports = {};
 __export(expressions_exports, {
   concat: () => concat,
-  rowId: () => rowId,
   substring: () => substring
 });
 module.exports = __toCommonJS(expressions_exports);
@@ -41,13 +40,9 @@ function substring(column, { from, for: _for }) {
   chunks.push(import_sql.sql`)`);
   return import_sql.sql.join(chunks);
 }
-function rowId() {
-  return import_sql.sql`rowid`;
-}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   concat,
-  rowId,
   substring,
   ...require("../sql/expressions/index.cjs")
 });

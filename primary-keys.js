@@ -1,5 +1,5 @@
 import { entityKind } from "../entity.js";
-import { SingleStoreTable } from "./table.js";
+import { PgTable } from "./table.js";
 function primaryKey(...config) {
   if (config[0].columns) {
     return new PrimaryKeyBuilder(config[0].columns, config[0].name);
@@ -7,7 +7,7 @@ function primaryKey(...config) {
   return new PrimaryKeyBuilder(config);
 }
 class PrimaryKeyBuilder {
-  static [entityKind] = "SingleStorePrimaryKeyBuilder";
+  static [entityKind] = "PgPrimaryKeyBuilder";
   /** @internal */
   columns;
   /** @internal */
@@ -27,11 +27,11 @@ class PrimaryKey {
     this.columns = columns;
     this.name = name;
   }
-  static [entityKind] = "SingleStorePrimaryKey";
+  static [entityKind] = "PgPrimaryKey";
   columns;
   name;
   getName() {
-    return this.name ?? `${this.table[SingleStoreTable.Symbol.Name]}_${this.columns.map((column) => column.name).join("_")}_pk`;
+    return this.name ?? `${this.table[PgTable.Symbol.Name]}_${this.columns.map((column) => column.name).join("_")}_pk`;
   }
 }
 export {

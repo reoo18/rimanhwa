@@ -15,12 +15,8 @@ function substring(column, { from, for: _for }) {
   chunks.push(sql`)`);
   return sql.join(chunks);
 }
-function rowId() {
-  return sql`rowid`;
-}
 export {
   concat,
-  rowId,
   substring
 };
 //# sourceMappingURL=expressions.js.map

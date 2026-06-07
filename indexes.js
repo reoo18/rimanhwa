@@ -1,35 +1,96 @@
-import { entityKind } from "../entity.js";
+import { SQL } from "../sql/sql.js";
+import { entityKind, is } from "../entity.js";
+import { IndexedColumn } from "./columns/index.js";
 class IndexBuilderOn {
-  constructor(name, unique) {
-    this.name = name;
+  constructor(unique, name) {
     this.unique = unique;
+    this.name = name;
   }
-  static [entityKind] = "SingleStoreIndexBuilderOn";
+  static [entityKind] = "PgIndexBuilderOn";
   on(...columns) {
-    return new IndexBuilder(this.name, columns, this.unique);
+    return new IndexBuilder(
+      columns.map((it) => {
+        if (is(it, SQL)) {
+          return it;
+        }
+        it = it;
+        const clonedIndexedColumn = new IndexedColumn(it.name, !!it.keyAsName, it.columnType, it.indexConfig);
+        it.indexConfig = JSON.parse(JSON.stringify(it.defaultConfig));
+        return clonedIndexedColumn;
+      }),
+      this.unique,
+      false,
+      this.name
+    );
+  }
+  onOnly(...columns) {
+    return new IndexBuilder(
+      columns.map((it) => {
+        if (is(it, SQL)) {
+          return it;
+        }
+        it = it;
+        const clonedIndexedColumn = new IndexedColumn(it.name, !!it.keyAsName, it.columnType, it.indexConfig);
+        it.indexConfig = it.defaultConfig;
+        return clonedIndexedColumn;
+      }),
+      this.unique,
+      true,
+      this.name
+    );
+  }
+  /**
+   * Specify what index method to use. Choices are `btree`, `hash`, `gist`, `spgist`, `gin`, `brin`, or user-installed access methods like `bloom`. The default method is `btree.
+   *
+   * If you have the `pg_vector` extension installed in your database, you can use the `hnsw` and `ivfflat` options, which are predefined types.
+   *
+   * **You can always specify any string you want in the method, in case Drizzle doesn't have it natively in its types**
+   *
+   * @param method The name of the index method to be used
+   * @param columns
+   * @returns
+   */
+  using(method, ...columns) {
+    return new IndexBuilder(
+      columns.map((it) => {
+        if (is(it, SQL)) {
+          return it;
+        }
+        it = it;
+        const clonedIndexedColumn = new IndexedColumn(it.name, !!it.keyAsName, it.columnType, it.indexConfig);
+        it.indexConfig = JSON.parse(JSON.stringify(it.defaultConfig));
+        return clonedIndexedColumn;
+      }),
+      this.unique,
+      true,
+      this.name,
+      method
+    );
   }
 }
 class IndexBuilder {
-  static [entityKind] = "SingleStoreIndexBuilder";
+  static [entityKind] = "PgIndexBuilder";
   /** @internal */
   config;
-  constructor(name, columns, unique) {
+  constructor(columns, unique, only, name, method = "btree") {
     this.config = {
       name,
       columns,
-      unique
+      unique,
+      only,
+      method
     };
   }
-  using(using) {
-    this.config.using = using;
+  concurrently() {
+    this.config.concurrently = true;
     return this;
   }
-  algorithm(algorithm) {
-    this.config.algorithm = algorithm;
+  with(obj) {
+    this.config.with = obj;
     return this;
   }
-  lock(lock) {
-    this.config.lock = lock;
+  where(condition) {
+    this.config.where = condition;
     return this;
   }
   /** @internal */
@@ -38,17 +99,17 @@ class IndexBuilder {
   }
 }
 class Index {
-  static [entityKind] = "SingleStoreIndex";
+  static [entityKind] = "PgIndex";
   config;
   constructor(config, table) {
     this.config = { ...config, table };
   }
 }
 function index(name) {
-  return new IndexBuilderOn(name, false);
+  return new IndexBuilderOn(false, name);
 }
 function uniqueIndex(name) {
-  return new IndexBuilderOn(name, true);
+  return new IndexBuilderOn(true, name);
 }
 export {
   Index,

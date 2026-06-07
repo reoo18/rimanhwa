@@ -1,13 +1,13 @@
 import { entityKind } from "../entity.js";
 import { TableName } from "../table.utils.js";
 class ForeignKeyBuilder {
-  static [entityKind] = "SQLiteForeignKeyBuilder";
+  static [entityKind] = "PgForeignKeyBuilder";
   /** @internal */
   reference;
   /** @internal */
-  _onUpdate;
+  _onUpdate = "no action";
   /** @internal */
-  _onDelete;
+  _onDelete = "no action";
   constructor(config, actions) {
     this.reference = () => {
       const { name, columns, foreignColumns } = config();
@@ -19,11 +19,11 @@ class ForeignKeyBuilder {
     }
   }
   onUpdate(action) {
-    this._onUpdate = action;
+    this._onUpdate = action === void 0 ? "no action" : action;
     return this;
   }
   onDelete(action) {
-    this._onDelete = action;
+    this._onDelete = action === void 0 ? "no action" : action;
     return this;
   }
   /** @internal */
@@ -38,7 +38,7 @@ class ForeignKey {
     this.onUpdate = builder._onUpdate;
     this.onDelete = builder._onDelete;
   }
-  static [entityKind] = "SQLiteForeignKey";
+  static [entityKind] = "PgForeignKey";
   reference;
   onUpdate;
   onDelete;
@@ -57,15 +57,12 @@ class ForeignKey {
 }
 function foreignKey(config) {
   function mappedConfig() {
-    if (typeof config === "function") {
-      const { name, columns, foreignColumns } = config();
-      return {
-        name,
-        columns,
-        foreignColumns
-      };
-    }
-    return config;
+    const { name, columns, foreignColumns } = config;
+    return {
+      name,
+      columns,
+      foreignColumns
+    };
   }
   return new ForeignKeyBuilder(mappedConfig);
 }

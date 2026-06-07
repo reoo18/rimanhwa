@@ -32,7 +32,7 @@ function primaryKey(...config) {
   return new PrimaryKeyBuilder(config);
 }
 class PrimaryKeyBuilder {
-  static [import_entity.entityKind] = "SingleStorePrimaryKeyBuilder";
+  static [import_entity.entityKind] = "PgPrimaryKeyBuilder";
   /** @internal */
   columns;
   /** @internal */
@@ -52,11 +52,11 @@ class PrimaryKey {
     this.columns = columns;
     this.name = name;
   }
-  static [import_entity.entityKind] = "SingleStorePrimaryKey";
+  static [import_entity.entityKind] = "PgPrimaryKey";
   columns;
   name;
   getName() {
-    return this.name ?? `${this.table[import_table.SingleStoreTable.Symbol.Name]}_${this.columns.map((column) => column.name).join("_")}_pk`;
+    return this.name ?? `${this.table[import_table.PgTable.Symbol.Name]}_${this.columns.map((column) => column.name).join("_")}_pk`;
   }
 }
 // Annotate the CommonJS export names for ESM import in node:

@@ -4,8 +4,9 @@ class CheckBuilder {
     this.name = name;
     this.value = value;
   }
-  static [entityKind] = "SQLiteCheckBuilder";
+  static [entityKind] = "PgCheckBuilder";
   brand;
+  /** @internal */
   build(table) {
     return new Check(table, this);
   }
@@ -16,7 +17,7 @@ class Check {
     this.name = builder.name;
     this.value = builder.value;
   }
-  static [entityKind] = "SQLiteCheck";
+  static [entityKind] = "PgCheck";
   name;
   value;
 }

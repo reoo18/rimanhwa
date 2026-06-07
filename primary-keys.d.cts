@@ -1,9 +1,9 @@
 import { entityKind } from "../entity.cjs";
-import type { AnySingleStoreColumn, SingleStoreColumn } from "./columns/index.cjs";
-import { SingleStoreTable } from "./table.cjs";
-export declare function primaryKey<TTableName extends string, TColumn extends AnySingleStoreColumn<{
+import type { AnyPgColumn, PgColumn } from "./columns/index.cjs";
+import { PgTable } from "./table.cjs";
+export declare function primaryKey<TTableName extends string, TColumn extends AnyPgColumn<{
     tableName: TTableName;
-}>, TColumns extends AnySingleStoreColumn<{
+}>, TColumns extends AnyPgColumn<{
     tableName: TTableName;
 }>[]>(config: {
     name?: string;
@@ -13,18 +13,18 @@ export declare function primaryKey<TTableName extends string, TColumn extends An
  * @deprecated: Please use primaryKey({ columns: [] }) instead of this function
  * @param columns
  */
-export declare function primaryKey<TTableName extends string, TColumns extends AnySingleStoreColumn<{
+export declare function primaryKey<TTableName extends string, TColumns extends AnyPgColumn<{
     tableName: TTableName;
 }>[]>(...columns: TColumns): PrimaryKeyBuilder;
 export declare class PrimaryKeyBuilder {
     static readonly [entityKind]: string;
-    constructor(columns: SingleStoreColumn[], name?: string);
+    constructor(columns: PgColumn[], name?: string);
 }
 export declare class PrimaryKey {
-    readonly table: SingleStoreTable;
+    readonly table: PgTable;
     static readonly [entityKind]: string;
-    readonly columns: SingleStoreColumn[];
+    readonly columns: AnyPgColumn<{}>[];
     readonly name?: string;
-    constructor(table: SingleStoreTable, columns: SingleStoreColumn[], name?: string);
+    constructor(table: PgTable, columns: AnyPgColumn<{}>[], name?: string);
     getName(): string;
 }

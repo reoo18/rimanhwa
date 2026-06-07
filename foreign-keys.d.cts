@@ -1,23 +1,19 @@
 import { entityKind } from "../entity.cjs";
-import type { AnySQLiteColumn, SQLiteColumn } from "./columns/index.cjs";
-import type { SQLiteTable } from "./table.cjs";
+import type { AnyPgColumn, PgColumn } from "./columns/index.cjs";
+import type { PgTable } from "./table.cjs";
 export type UpdateDeleteAction = 'cascade' | 'restrict' | 'no action' | 'set null' | 'set default';
 export type Reference = () => {
     readonly name?: string;
-    readonly columns: SQLiteColumn[];
-    readonly foreignTable: SQLiteTable;
-    readonly foreignColumns: SQLiteColumn[];
+    readonly columns: PgColumn[];
+    readonly foreignTable: PgTable;
+    readonly foreignColumns: PgColumn[];
 };
 export declare class ForeignKeyBuilder {
     static readonly [entityKind]: string;
-    _: {
-        brand: 'SQLiteForeignKeyBuilder';
-        foreignTableName: 'TForeignTableName';
-    };
     constructor(config: () => {
         name?: string;
-        columns: SQLiteColumn[];
-        foreignColumns: SQLiteColumn[];
+        columns: PgColumn[];
+        foreignColumns: PgColumn[];
     }, actions?: {
         onUpdate?: UpdateDeleteAction;
         onDelete?: UpdateDeleteAction;
@@ -25,37 +21,24 @@ export declare class ForeignKeyBuilder {
     onUpdate(action: UpdateDeleteAction): this;
     onDelete(action: UpdateDeleteAction): this;
 }
+export type AnyForeignKeyBuilder = ForeignKeyBuilder;
 export declare class ForeignKey {
-    readonly table: SQLiteTable;
+    readonly table: PgTable;
     static readonly [entityKind]: string;
     readonly reference: Reference;
     readonly onUpdate: UpdateDeleteAction | undefined;
     readonly onDelete: UpdateDeleteAction | undefined;
-    constructor(table: SQLiteTable, builder: ForeignKeyBuilder);
+    constructor(table: PgTable, builder: ForeignKeyBuilder);
     getName(): string;
 }
-type ColumnsWithTable<TTableName extends string, TColumns extends SQLiteColumn[]> = {
-    [Key in keyof TColumns]: AnySQLiteColumn<{
+type ColumnsWithTable<TTableName extends string, TColumns extends PgColumn[]> = {
+    [Key in keyof TColumns]: AnyPgColumn<{
         tableName: TTableName;
     }>;
 };
-/**
- * @deprecated please use `foreignKey({ columns: [], foreignColumns: [] })` syntax without callback
- * @param config
- * @returns
- */
-export declare function foreignKey<TTableName extends string, TForeignTableName extends string, TColumns extends [AnySQLiteColumn<{
+export declare function foreignKey<TTableName extends string, TForeignTableName extends string, TColumns extends [AnyPgColumn<{
     tableName: TTableName;
-}>, ...AnySQLiteColumn<{
-    tableName: TTableName;
-}>[]]>(config: () => {
-    name?: string;
-    columns: TColumns;
-    foreignColumns: ColumnsWithTable<TForeignTableName, TColumns>;
-}): ForeignKeyBuilder;
-export declare function foreignKey<TTableName extends string, TForeignTableName extends string, TColumns extends [AnySQLiteColumn<{
-    tableName: TTableName;
-}>, ...AnySQLiteColumn<{
+}>, ...AnyPgColumn<{
     tableName: TTableName;
 }>[]]>(config: {
     name?: string;
