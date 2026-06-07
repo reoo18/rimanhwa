@@ -13,10 +13,10 @@ var __copyProps = (to, from, except, desc) => {
 };
 var __reExport = (target, mod, secondTarget) => (__copyProps(target, mod, "default"), secondTarget && __copyProps(secondTarget, mod, "default"));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var postgres_js_exports = {};
-module.exports = __toCommonJS(postgres_js_exports);
-__reExport(postgres_js_exports, require("./driver.cjs"), module.exports);
-__reExport(postgres_js_exports, require("./session.cjs"), module.exports);
+var pglite_exports = {};
+module.exports = __toCommonJS(pglite_exports);
+__reExport(pglite_exports, require("./driver.cjs"), module.exports);
+__reExport(pglite_exports, require("./session.cjs"), module.exports);
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   ...require("./driver.cjs"),

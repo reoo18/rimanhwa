@@ -1,9 +1,7 @@
 "use strict";
-var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __export = (target, all) => {
   for (var name in all)
@@ -17,22 +15,15 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var driver_exports = {};
 __export(driver_exports, {
-  PostgresJsDatabase: () => PostgresJsDatabase,
+  PgliteDatabase: () => PgliteDatabase,
+  PgliteDriver: () => PgliteDriver,
   drizzle: () => drizzle
 });
 module.exports = __toCommonJS(driver_exports);
-var import_postgres = __toESM(require("postgres"), 1);
+var import_pglite = require("@electric-sql/pglite");
 var import_entity = require("../entity.cjs");
 var import_logger = require("../logger.cjs");
 var import_db = require("../pg-core/db.cjs");
@@ -40,17 +31,24 @@ var import_dialect = require("../pg-core/dialect.cjs");
 var import_relations = require("../relations.cjs");
 var import_utils = require("../utils.cjs");
 var import_session = require("./session.cjs");
-class PostgresJsDatabase extends import_db.PgDatabase {
-  static [import_entity.entityKind] = "PostgresJsDatabase";
+class PgliteDriver {
+  constructor(client, dialect, options = {}) {
+    this.client = client;
+    this.dialect = dialect;
+    this.options = options;
+  }
+  static [import_entity.entityKind] = "PgliteDriver";
+  createSession(schema) {
+    return new import_session.PgliteSession(this.client, this.dialect, schema, {
+      logger: this.options.logger,
+      cache: this.options.cache
+    });
+  }
+}
+class PgliteDatabase extends import_db.PgDatabase {
+  static [import_entity.entityKind] = "PgliteDatabase";
 }
 function construct(client, config = {}) {
-  const transparentParser = (val) => val;
-  for (const type of ["1184", "1082", "1083", "1114", "1182", "1185", "1115", "1231"]) {
-    client.options.parsers[type] = transparentParser;
-    client.options.serializers[type] = transparentParser;
-  }
-  client.options.serializers["114"] = transparentParser;
-  client.options.serializers["3802"] = transparentParser;
   const dialect = new import_dialect.PgDialect({ casing: config.casing });
   let logger;
   if (config.logger === true) {
@@ -70,8 +68,9 @@ function construct(client, config = {}) {
       tableNamesMap: tablesConfig.tableNamesMap
     };
   }
-  const session = new import_session.PostgresJsSession(client, dialect, schema, { logger, cache: config.cache });
-  const db = new PostgresJsDatabase(dialect, session, schema);
+  const driver = new PgliteDriver(client, dialect, { logger, cache: config.cache });
+  const session = driver.createSession(schema);
+  const db = new PgliteDatabase(dialect, session, schema);
   db.$client = client;
   db.$cache = config.cache;
   if (db.$cache) {
@@ -80,37 +79,33 @@ function construct(client, config = {}) {
   return db;
 }
 function drizzle(...params) {
-  if (typeof params[0] === "string") {
-    const instance = (0, import_postgres.default)(params[0]);
+  if (params[0] === void 0 || typeof params[0] === "string") {
+    const instance = new import_pglite.PGlite(params[0]);
     return construct(instance, params[1]);
   }
   if ((0, import_utils.isConfig)(params[0])) {
     const { connection, client, ...drizzleConfig } = params[0];
     if (client) return construct(client, drizzleConfig);
-    if (typeof connection === "object" && connection.url !== void 0) {
-      const { url, ...config } = connection;
-      const instance2 = (0, import_postgres.default)(url, config);
+    if (typeof connection === "object") {
+      const { dataDir, ...options } = connection;
+      const instance2 = new import_pglite.PGlite(dataDir, options);
       return construct(instance2, drizzleConfig);
     }
-    const instance = (0, import_postgres.default)(connection);
+    const instance = new import_pglite.PGlite(connection);
     return construct(instance, drizzleConfig);
   }
   return construct(params[0], params[1]);
 }
 ((drizzle2) => {
   function mock(config) {
-    return construct({
-      options: {
-        parsers: {},
-        serializers: {}
-      }
-    }, config);
+    return construct({}, config);
   }
   drizzle2.mock = mock;
 })(drizzle || (drizzle = {}));
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  PostgresJsDatabase,
+  PgliteDatabase,
+  PgliteDriver,
   drizzle
 });
 //# sourceMappingURL=driver.cjs.map

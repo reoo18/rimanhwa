@@ -18,21 +18,21 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var session_exports = {};
 __export(session_exports, {
-  PostgresJsPreparedQuery: () => PostgresJsPreparedQuery,
-  PostgresJsSession: () => PostgresJsSession,
-  PostgresJsTransaction: () => PostgresJsTransaction
+  PglitePreparedQuery: () => PglitePreparedQuery,
+  PgliteSession: () => PgliteSession,
+  PgliteTransaction: () => PgliteTransaction
 });
 module.exports = __toCommonJS(session_exports);
-var import_core = require("../cache/core/index.cjs");
 var import_entity = require("../entity.cjs");
 var import_logger = require("../logger.cjs");
 var import_pg_core = require("../pg-core/index.cjs");
 var import_session = require("../pg-core/session.cjs");
 var import_sql = require("../sql/sql.cjs");
-var import_tracing = require("../tracing.cjs");
 var import_utils = require("../utils.cjs");
-class PostgresJsPreparedQuery extends import_session.PgPreparedQuery {
-  constructor(client, queryString, params, logger, cache, queryMetadata, cacheConfig, fields, _isResponseInArrayMode, customResultMapper) {
+var import_pglite = require("@electric-sql/pglite");
+var import_cache = require("../cache/core/cache.cjs");
+class PglitePreparedQuery extends import_session.PgPreparedQuery {
+  constructor(client, queryString, params, logger, cache, queryMetadata, cacheConfig, fields, name, _isResponseInArrayMode, customResultMapper) {
     super({ sql: queryString, params }, cache, queryMetadata, cacheConfig);
     this.client = client;
     this.queryString = queryString;
@@ -41,76 +41,88 @@ class PostgresJsPreparedQuery extends import_session.PgPreparedQuery {
     this.fields = fields;
     this._isResponseInArrayMode = _isResponseInArrayMode;
     this.customResultMapper = customResultMapper;
-  }
-  static [import_entity.entityKind] = "PostgresJsPreparedQuery";
-  async execute(placeholderValues = {}) {
-    return import_tracing.tracer.startActiveSpan("drizzle.execute", async (span) => {
-      const params = (0, import_sql.fillPlaceholders)(this.params, placeholderValues);
-      span?.setAttributes({
-        "drizzle.query.text": this.queryString,
-        "drizzle.query.params": JSON.stringify(params)
-      });
-      this.logger.logQuery(this.queryString, params);
-      const { fields, queryString: query, client, joinsNotNullableMap, customResultMapper } = this;
-      if (!fields && !customResultMapper) {
-        return import_tracing.tracer.startActiveSpan("drizzle.driver.execute", () => {
-          return this.queryWithCache(query, params, async () => {
-            return await client.unsafe(query, params);
-          });
-        });
+    this.rawQueryConfig = {
+      rowMode: "object",
+      parsers: {
+        [import_pglite.types.TIMESTAMP]: (value) => value,
+        [import_pglite.types.TIMESTAMPTZ]: (value) => value,
+        [import_pglite.types.INTERVAL]: (value) => value,
+        [import_pglite.types.DATE]: (value) => value,
+        // numeric[]
+        [1231]: (value) => value,
+        // timestamp[]
+        [1115]: (value) => value,
+        // timestamp with timezone[]
+        [1185]: (value) => value,
+        // interval[]
+        [1187]: (value) => value,
+        // date[]
+        [1182]: (value) => value
       }
-      const rows = await import_tracing.tracer.startActiveSpan("drizzle.driver.execute", () => {
-        span?.setAttributes({
-          "drizzle.query.text": query,
-          "drizzle.query.params": JSON.stringify(params)
-        });
-        return this.queryWithCache(query, params, async () => {
-          return await client.unsafe(query, params).values();
-        });
+    };
+    this.queryConfig = {
+      rowMode: "array",
+      parsers: {
+        [import_pglite.types.TIMESTAMP]: (value) => value,
+        [import_pglite.types.TIMESTAMPTZ]: (value) => value,
+        [import_pglite.types.INTERVAL]: (value) => value,
+        [import_pglite.types.DATE]: (value) => value,
+        // numeric[]
+        [1231]: (value) => value,
+        // timestamp[]
+        [1115]: (value) => value,
+        // timestamp with timezone[]
+        [1185]: (value) => value,
+        // interval[]
+        [1187]: (value) => value,
+        // date[]
+        [1182]: (value) => value
+      }
+    };
+  }
+  static [import_entity.entityKind] = "PglitePreparedQuery";
+  rawQueryConfig;
+  queryConfig;
+  async execute(placeholderValues = {}) {
+    const params = (0, import_sql.fillPlaceholders)(this.params, placeholderValues);
+    this.logger.logQuery(this.queryString, params);
+    const { fields, client, queryConfig, joinsNotNullableMap, customResultMapper, queryString, rawQueryConfig } = this;
+    if (!fields && !customResultMapper) {
+      return this.queryWithCache(queryString, params, async () => {
+        return await client.query(queryString, params, rawQueryConfig);
       });
-      return import_tracing.tracer.startActiveSpan("drizzle.mapResponse", () => {
-        return customResultMapper ? customResultMapper(rows) : rows.map((row) => (0, import_utils.mapResultRow)(fields, row, joinsNotNullableMap));
-      });
+    }
+    const result = await this.queryWithCache(queryString, params, async () => {
+      return await client.query(queryString, params, queryConfig);
     });
+    return customResultMapper ? customResultMapper(result.rows) : result.rows.map((row) => (0, import_utils.mapResultRow)(fields, row, joinsNotNullableMap));
   }
   all(placeholderValues = {}) {
-    return import_tracing.tracer.startActiveSpan("drizzle.execute", async (span) => {
-      const params = (0, import_sql.fillPlaceholders)(this.params, placeholderValues);
-      span?.setAttributes({
-        "drizzle.query.text": this.queryString,
-        "drizzle.query.params": JSON.stringify(params)
-      });
-      this.logger.logQuery(this.queryString, params);
-      return import_tracing.tracer.startActiveSpan("drizzle.driver.execute", () => {
-        span?.setAttributes({
-          "drizzle.query.text": this.queryString,
-          "drizzle.query.params": JSON.stringify(params)
-        });
-        return this.queryWithCache(this.queryString, params, async () => {
-          return this.client.unsafe(this.queryString, params);
-        });
-      });
-    });
+    const params = (0, import_sql.fillPlaceholders)(this.params, placeholderValues);
+    this.logger.logQuery(this.queryString, params);
+    return this.queryWithCache(this.queryString, params, async () => {
+      return await this.client.query(this.queryString, params, this.rawQueryConfig);
+    }).then((result) => result.rows);
   }
   /** @internal */
   isResponseInArrayMode() {
     return this._isResponseInArrayMode;
   }
 }
-class PostgresJsSession extends import_session.PgSession {
+class PgliteSession extends import_session.PgSession {
   constructor(client, dialect, schema, options = {}) {
     super(dialect);
     this.client = client;
     this.schema = schema;
     this.options = options;
     this.logger = options.logger ?? new import_logger.NoopLogger();
-    this.cache = options.cache ?? new import_core.NoopCache();
+    this.cache = options.cache ?? new import_cache.NoopCache();
   }
-  static [import_entity.entityKind] = "PostgresJsSession";
+  static [import_entity.entityKind] = "PgliteSession";
   logger;
   cache;
   prepareQuery(query, fields, name, isResponseInArrayMode, customResultMapper, queryMetadata, cacheConfig) {
-    return new PostgresJsPreparedQuery(
+    return new PglitePreparedQuery(
       this.client,
       query.sql,
       query.params,
@@ -119,56 +131,58 @@ class PostgresJsSession extends import_session.PgSession {
       queryMetadata,
       cacheConfig,
       fields,
+      name,
       isResponseInArrayMode,
       customResultMapper
     );
   }
-  query(query, params) {
-    this.logger.logQuery(query, params);
-    return this.client.unsafe(query, params).values();
-  }
-  queryObjects(query, params) {
-    return this.client.unsafe(query, params);
-  }
-  transaction(transaction, config) {
-    return this.client.begin(async (client) => {
-      const session = new PostgresJsSession(
+  async transaction(transaction, config) {
+    return this.client.transaction(async (client) => {
+      const session = new PgliteSession(
         client,
         this.dialect,
         this.schema,
         this.options
       );
-      const tx = new PostgresJsTransaction(this.dialect, session, this.schema);
+      const tx = new PgliteTransaction(this.dialect, session, this.schema);
       if (config) {
         await tx.setTransaction(config);
       }
       return transaction(tx);
     });
   }
-}
-class PostgresJsTransaction extends import_pg_core.PgTransaction {
-  constructor(dialect, session, schema, nestedIndex = 0) {
-    super(dialect, session, schema, nestedIndex);
-    this.session = session;
+  async count(sql2) {
+    const res = await this.execute(sql2);
+    return Number(
+      res["rows"][0]["count"]
+    );
   }
-  static [import_entity.entityKind] = "PostgresJsTransaction";
-  transaction(transaction) {
-    return this.session.client.savepoint((client) => {
-      const session = new PostgresJsSession(
-        client,
-        this.dialect,
-        this.schema,
-        this.session.options
-      );
-      const tx = new PostgresJsTransaction(this.dialect, session, this.schema);
-      return transaction(tx);
-    });
+}
+class PgliteTransaction extends import_pg_core.PgTransaction {
+  static [import_entity.entityKind] = "PgliteTransaction";
+  async transaction(transaction) {
+    const savepointName = `sp${this.nestedIndex + 1}`;
+    const tx = new PgliteTransaction(
+      this.dialect,
+      this.session,
+      this.schema,
+      this.nestedIndex + 1
+    );
+    await tx.execute(import_sql.sql.raw(`savepoint ${savepointName}`));
+    try {
+      const result = await transaction(tx);
+      await tx.execute(import_sql.sql.raw(`release savepoint ${savepointName}`));
+      return result;
+    } catch (err) {
+      await tx.execute(import_sql.sql.raw(`rollback to savepoint ${savepointName}`));
+      throw err;
+    }
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  PostgresJsPreparedQuery,
-  PostgresJsSession,
-  PostgresJsTransaction
+  PglitePreparedQuery,
+  PgliteSession,
+  PgliteTransaction
 });
 //# sourceMappingURL=session.cjs.map
