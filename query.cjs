@@ -18,13 +18,14 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var query_exports = {};
 __export(query_exports, {
-  RelationalQueryBuilder: () => RelationalQueryBuilder,
-  SingleStoreRelationalQuery: () => SingleStoreRelationalQuery
+  PgRelationalQuery: () => PgRelationalQuery,
+  RelationalQueryBuilder: () => RelationalQueryBuilder
 });
 module.exports = __toCommonJS(query_exports);
 var import_entity = require("../../entity.cjs");
 var import_query_promise = require("../../query-promise.cjs");
 var import_relations = require("../../relations.cjs");
+var import_tracing = require("../../tracing.cjs");
 class RelationalQueryBuilder {
   constructor(fullSchema, schema, tableNamesMap, table, tableConfig, dialect, session) {
     this.fullSchema = fullSchema;
@@ -35,9 +36,9 @@ class RelationalQueryBuilder {
     this.dialect = dialect;
     this.session = session;
   }
-  static [import_entity.entityKind] = "SingleStoreRelationalQueryBuilder";
+  static [import_entity.entityKind] = "PgRelationalQueryBuilder";
   findMany(config) {
-    return new SingleStoreRelationalQuery(
+    return new PgRelationalQuery(
       this.fullSchema,
       this.schema,
       this.tableNamesMap,
@@ -50,7 +51,7 @@ class RelationalQueryBuilder {
     );
   }
   findFirst(config) {
-    return new SingleStoreRelationalQuery(
+    return new PgRelationalQuery(
       this.fullSchema,
       this.schema,
       this.tableNamesMap,
@@ -63,8 +64,8 @@ class RelationalQueryBuilder {
     );
   }
 }
-class SingleStoreRelationalQuery extends import_query_promise.QueryPromise {
-  constructor(fullSchema, schema, tableNamesMap, table, tableConfig, dialect, session, config, queryMode) {
+class PgRelationalQuery extends import_query_promise.QueryPromise {
+  constructor(fullSchema, schema, tableNamesMap, table, tableConfig, dialect, session, config, mode) {
     super();
     this.fullSchema = fullSchema;
     this.schema = schema;
@@ -74,25 +75,35 @@ class SingleStoreRelationalQuery extends import_query_promise.QueryPromise {
     this.dialect = dialect;
     this.session = session;
     this.config = config;
-    this.queryMode = queryMode;
+    this.mode = mode;
   }
-  static [import_entity.entityKind] = "SingleStoreRelationalQuery";
-  prepare() {
-    const { query, builtQuery } = this._toSQL();
-    return this.session.prepareQuery(
-      builtQuery,
-      void 0,
-      (rawRows) => {
-        const rows = rawRows.map((row) => (0, import_relations.mapRelationalRow)(this.schema, this.tableConfig, row, query.selection));
-        if (this.queryMode === "first") {
-          return rows[0];
+  static [import_entity.entityKind] = "PgRelationalQuery";
+  /** @internal */
+  _prepare(name) {
+    return import_tracing.tracer.startActiveSpan("drizzle.prepareQuery", () => {
+      const { query, builtQuery } = this._toSQL();
+      return this.session.prepareQuery(
+        builtQuery,
+        void 0,
+        name,
+        true,
+        (rawRows, mapColumnValue) => {
+          const rows = rawRows.map(
+            (row) => (0, import_relations.mapRelationalRow)(this.schema, this.tableConfig, row, query.selection, mapColumnValue)
+          );
+          if (this.mode === "first") {
+            return rows[0];
+          }
+          return rows;
         }
-        return rows;
-      }
-    );
+      );
+    });
+  }
+  prepare(name) {
+    return this._prepare(name);
   }
   _getQuery() {
-    return this.dialect.buildRelationalQuery({
+    return this.dialect.buildRelationalQueryWithoutPK({
       fullSchema: this.fullSchema,
       schema: this.schema,
       tableNamesMap: this.tableNamesMap,
@@ -102,25 +113,33 @@ class SingleStoreRelationalQuery extends import_query_promise.QueryPromise {
       tableAlias: this.tableConfig.tsName
     });
   }
-  _toSQL() {
-    const query = this._getQuery();
-    const builtQuery = this.dialect.sqlToQuery(query.sql);
-    return { builtQuery, query };
-  }
   /** @internal */
   getSQL() {
     return this._getQuery().sql;
   }
+  _toSQL() {
+    const query = this._getQuery();
+    const builtQuery = this.dialect.sqlToQuery(query.sql);
+    return { query, builtQuery };
+  }
   toSQL() {
     return this._toSQL().builtQuery;
   }
+  authToken;
+  /** @internal */
+  setToken(token) {
+    this.authToken = token;
+    return this;
+  }
   execute() {
-    return this.prepare().execute();
+    return import_tracing.tracer.startActiveSpan("drizzle.operation", () => {
+      return this._prepare().execute(void 0, this.authToken);
+    });
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  RelationalQueryBuilder,
-  SingleStoreRelationalQuery
+  PgRelationalQuery,
+  RelationalQueryBuilder
 });
 //# sourceMappingURL=query.cjs.map

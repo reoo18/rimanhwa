@@ -1,12 +1,13 @@
 import { entityKind } from "../../entity.cjs";
 import { QueryPromise } from "../../query-promise.cjs";
 import { type BuildQueryResult, type DBQueryConfig, type TableRelationalConfig, type TablesRelationalConfig } from "../../relations.cjs";
-import type { Query } from "../../sql/sql.cjs";
+import type { RunnableQuery } from "../../runnable-query.cjs";
+import type { Query, SQLWrapper } from "../../sql/sql.cjs";
 import type { KnownKeysOnly } from "../../utils.cjs";
-import type { SingleStoreDialect } from "../dialect.cjs";
-import type { PreparedQueryHKTBase, PreparedQueryKind, SingleStorePreparedQueryConfig, SingleStoreSession } from "../session.cjs";
-import type { SingleStoreTable } from "../table.cjs";
-export declare class RelationalQueryBuilder<TPreparedQueryHKT extends PreparedQueryHKTBase, TSchema extends TablesRelationalConfig, TFields extends TableRelationalConfig> {
+import type { PgDialect } from "../dialect.cjs";
+import type { PgPreparedQuery, PgSession, PreparedQueryConfig } from "../session.cjs";
+import type { PgTable } from "../table.cjs";
+export declare class RelationalQueryBuilder<TSchema extends TablesRelationalConfig, TFields extends TableRelationalConfig> {
     private fullSchema;
     private schema;
     private tableNamesMap;
@@ -15,11 +16,11 @@ export declare class RelationalQueryBuilder<TPreparedQueryHKT extends PreparedQu
     private dialect;
     private session;
     static readonly [entityKind]: string;
-    constructor(fullSchema: Record<string, unknown>, schema: TSchema, tableNamesMap: Record<string, string>, table: SingleStoreTable, tableConfig: TableRelationalConfig, dialect: SingleStoreDialect, session: SingleStoreSession);
-    findMany<TConfig extends DBQueryConfig<'many', true, TSchema, TFields>>(config?: KnownKeysOnly<TConfig, DBQueryConfig<'many', true, TSchema, TFields>>): SingleStoreRelationalQuery<TPreparedQueryHKT, BuildQueryResult<TSchema, TFields, TConfig>[]>;
-    findFirst<TSelection extends Omit<DBQueryConfig<'many', true, TSchema, TFields>, 'limit'>>(config?: KnownKeysOnly<TSelection, Omit<DBQueryConfig<'many', true, TSchema, TFields>, 'limit'>>): SingleStoreRelationalQuery<TPreparedQueryHKT, BuildQueryResult<TSchema, TFields, TSelection> | undefined>;
+    constructor(fullSchema: Record<string, unknown>, schema: TSchema, tableNamesMap: Record<string, string>, table: PgTable, tableConfig: TableRelationalConfig, dialect: PgDialect, session: PgSession);
+    findMany<TConfig extends DBQueryConfig<'many', true, TSchema, TFields>>(config?: KnownKeysOnly<TConfig, DBQueryConfig<'many', true, TSchema, TFields>>): PgRelationalQuery<BuildQueryResult<TSchema, TFields, TConfig>[]>;
+    findFirst<TSelection extends Omit<DBQueryConfig<'many', true, TSchema, TFields>, 'limit'>>(config?: KnownKeysOnly<TSelection, Omit<DBQueryConfig<'many', true, TSchema, TFields>, 'limit'>>): PgRelationalQuery<BuildQueryResult<TSchema, TFields, TSelection> | undefined>;
 }
-export declare class SingleStoreRelationalQuery<TPreparedQueryHKT extends PreparedQueryHKTBase, TResult> extends QueryPromise<TResult> {
+export declare class PgRelationalQuery<TResult> extends QueryPromise<TResult> implements RunnableQuery<TResult, 'pg'>, SQLWrapper {
     private fullSchema;
     private schema;
     private tableNamesMap;
@@ -28,15 +29,19 @@ export declare class SingleStoreRelationalQuery<TPreparedQueryHKT extends Prepar
     private dialect;
     private session;
     private config;
-    private queryMode;
+    private mode;
     static readonly [entityKind]: string;
-    protected $brand: 'SingleStoreRelationalQuery';
-    constructor(fullSchema: Record<string, unknown>, schema: TablesRelationalConfig, tableNamesMap: Record<string, string>, table: SingleStoreTable, tableConfig: TableRelationalConfig, dialect: SingleStoreDialect, session: SingleStoreSession, config: DBQueryConfig<'many', true> | true, queryMode: 'many' | 'first');
-    prepare(): PreparedQueryKind<TPreparedQueryHKT, SingleStorePreparedQueryConfig & {
+    readonly _: {
+        readonly dialect: 'pg';
+        readonly result: TResult;
+    };
+    constructor(fullSchema: Record<string, unknown>, schema: TablesRelationalConfig, tableNamesMap: Record<string, string>, table: PgTable, tableConfig: TableRelationalConfig, dialect: PgDialect, session: PgSession, config: DBQueryConfig<'many', true> | true, mode: 'many' | 'first');
+    prepare(name: string): PgPreparedQuery<PreparedQueryConfig & {
         execute: TResult;
-    }, true>;
+    }>;
     private _getQuery;
     private _toSQL;
     toSQL(): Query;
+    private authToken?;
     execute(): Promise<TResult>;
 }

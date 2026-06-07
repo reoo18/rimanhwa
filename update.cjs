@@ -18,43 +18,127 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var update_exports = {};
 __export(update_exports, {
-  SingleStoreUpdateBase: () => SingleStoreUpdateBase,
-  SingleStoreUpdateBuilder: () => SingleStoreUpdateBuilder
+  PgUpdateBase: () => PgUpdateBase,
+  PgUpdateBuilder: () => PgUpdateBuilder
 });
 module.exports = __toCommonJS(update_exports);
 var import_entity = require("../../entity.cjs");
+var import_table = require("../table.cjs");
 var import_query_promise = require("../../query-promise.cjs");
 var import_selection_proxy = require("../../selection-proxy.cjs");
-var import_table = require("../../table.cjs");
+var import_sql = require("../../sql/sql.cjs");
+var import_subquery = require("../../subquery.cjs");
+var import_table2 = require("../../table.cjs");
 var import_utils = require("../../utils.cjs");
+var import_view_common = require("../../view-common.cjs");
 var import_utils2 = require("../utils.cjs");
-class SingleStoreUpdateBuilder {
+class PgUpdateBuilder {
   constructor(table, session, dialect, withList) {
     this.table = table;
     this.session = session;
     this.dialect = dialect;
     this.withList = withList;
   }
-  static [import_entity.entityKind] = "SingleStoreUpdateBuilder";
+  static [import_entity.entityKind] = "PgUpdateBuilder";
+  authToken;
+  setToken(token) {
+    this.authToken = token;
+    return this;
+  }
   set(values) {
-    return new SingleStoreUpdateBase(
+    return new PgUpdateBase(
       this.table,
       (0, import_utils.mapUpdateSet)(this.table, values),
       this.session,
       this.dialect,
       this.withList
-    );
+    ).setToken(this.authToken);
   }
 }
-class SingleStoreUpdateBase extends import_query_promise.QueryPromise {
+class PgUpdateBase extends import_query_promise.QueryPromise {
   constructor(table, set, session, dialect, withList) {
     super();
     this.session = session;
     this.dialect = dialect;
-    this.config = { set, table, withList };
+    this.config = { set, table, withList, joins: [] };
+    this.tableName = (0, import_utils.getTableLikeName)(table);
+    this.joinsNotNullableMap = typeof this.tableName === "string" ? { [this.tableName]: true } : {};
   }
-  static [import_entity.entityKind] = "SingleStoreUpdate";
+  static [import_entity.entityKind] = "PgUpdate";
   config;
+  tableName;
+  joinsNotNullableMap;
+  cacheConfig;
+  from(source) {
+    const src = source;
+    const tableName = (0, import_utils.getTableLikeName)(src);
+    if (typeof tableName === "string") {
+      this.joinsNotNullableMap[tableName] = true;
+    }
+    this.config.from = src;
+    return this;
+  }
+  getTableLikeFields(table) {
+    if ((0, import_entity.is)(table, import_table.PgTable)) {
+      return table[import_table2.Table.Symbol.Columns];
+    } else if ((0, import_entity.is)(table, import_subquery.Subquery)) {
+      return table._.selectedFields;
+    }
+    return table[import_view_common.ViewBaseConfig].selectedFields;
+  }
+  createJoin(joinType) {
+    return (table, on) => {
+      const tableName = (0, import_utils.getTableLikeName)(table);
+      if (typeof tableName === "string" && this.config.joins.some((join) => join.alias === tableName)) {
+        throw new Error(`Alias "${tableName}" is already used in this query`);
+      }
+      if (typeof on === "function") {
+        const from = this.config.from && !(0, import_entity.is)(this.config.from, import_sql.SQL) ? this.getTableLikeFields(this.config.from) : void 0;
+        on = on(
+          new Proxy(
+            this.config.table[import_table2.Table.Symbol.Columns],
+            new import_selection_proxy.SelectionProxyHandler({ sqlAliasedBehavior: "sql", sqlBehavior: "sql" })
+          ),
+          from && new Proxy(
+            from,
+            new import_selection_proxy.SelectionProxyHandler({ sqlAliasedBehavior: "sql", sqlBehavior: "sql" })
+          )
+        );
+      }
+      this.config.joins.push({ on, table, joinType, alias: tableName });
+      if (typeof tableName === "string") {
+        switch (joinType) {
+          case "left": {
+            this.joinsNotNullableMap[tableName] = false;
+            break;
+          }
+          case "right": {
+            this.joinsNotNullableMap = Object.fromEntries(
+              Object.entries(this.joinsNotNullableMap).map(([key]) => [key, false])
+            );
+            this.joinsNotNullableMap[tableName] = true;
+            break;
+          }
+          case "inner": {
+            this.joinsNotNullableMap[tableName] = true;
+            break;
+          }
+          case "full": {
+            this.joinsNotNullableMap = Object.fromEntries(
+              Object.entries(this.joinsNotNullableMap).map(([key]) => [key, false])
+            );
+            this.joinsNotNullableMap[tableName] = false;
+            break;
+          }
+        }
+      }
+      return this;
+    };
+  }
+  leftJoin = this.createJoin("left");
+  rightJoin = this.createJoin("right");
+  innerJoin = this.createJoin("inner");
+  fullJoin = this.createJoin("full");
   /**
    * Adds a 'where' clause to the query.
    *
@@ -69,10 +153,10 @@ class SingleStoreUpdateBase extends import_query_promise.QueryPromise {
    *
    * ```ts
    * // Update all cars with green color
-   * db.update(cars).set({ color: 'red' })
+   * await db.update(cars).set({ color: 'red' })
    *   .where(eq(cars.color, 'green'));
    * // or
-   * db.update(cars).set({ color: 'red' })
+   * await db.update(cars).set({ color: 'red' })
    *   .where(sql`${cars.color} = 'green'`)
    * ```
    *
@@ -80,11 +164,11 @@ class SingleStoreUpdateBase extends import_query_promise.QueryPromise {
    *
    * ```ts
    * // Update all BMW cars with a green color
-   * db.update(cars).set({ color: 'red' })
+   * await db.update(cars).set({ color: 'red' })
    *   .where(and(eq(cars.color, 'green'), eq(cars.brand, 'BMW')));
    *
    * // Update all cars with the green or blue color
-   * db.update(cars).set({ color: 'red' })
+   * await db.update(cars).set({ color: 'red' })
    *   .where(or(eq(cars.color, 'green'), eq(cars.color, 'blue')));
    * ```
    */
@@ -92,24 +176,26 @@ class SingleStoreUpdateBase extends import_query_promise.QueryPromise {
     this.config.where = where;
     return this;
   }
-  orderBy(...columns) {
-    if (typeof columns[0] === "function") {
-      const orderBy = columns[0](
-        new Proxy(
-          this.config.table[import_table.Table.Symbol.Columns],
-          new import_selection_proxy.SelectionProxyHandler({ sqlAliasedBehavior: "alias", sqlBehavior: "sql" })
-        )
-      );
-      const orderByArray = Array.isArray(orderBy) ? orderBy : [orderBy];
-      this.config.orderBy = orderByArray;
-    } else {
-      const orderByArray = columns;
-      this.config.orderBy = orderByArray;
+  returning(fields) {
+    if (!fields) {
+      fields = Object.assign({}, this.config.table[import_table2.Table.Symbol.Columns]);
+      if (this.config.from) {
+        const tableName = (0, import_utils.getTableLikeName)(this.config.from);
+        if (typeof tableName === "string" && this.config.from && !(0, import_entity.is)(this.config.from, import_sql.SQL)) {
+          const fromFields = this.getTableLikeFields(this.config.from);
+          fields[tableName] = fromFields;
+        }
+        for (const join of this.config.joins) {
+          const tableName2 = (0, import_utils.getTableLikeName)(join.table);
+          if (typeof tableName2 === "string" && !(0, import_entity.is)(join.table, import_sql.SQL)) {
+            const fromFields = this.getTableLikeFields(join.table);
+            fields[tableName2] = fromFields;
+          }
+        }
+      }
     }
-    return this;
-  }
-  limit(limit) {
-    this.config.limit = limit;
+    this.config.returningFields = fields;
+    this.config.returning = (0, import_utils.orderSelectedFields)(fields);
     return this;
   }
   /** @internal */
@@ -120,36 +206,45 @@ class SingleStoreUpdateBase extends import_query_promise.QueryPromise {
     const { typings: _typings, ...rest } = this.dialect.sqlToQuery(this.getSQL());
     return rest;
   }
-  prepare() {
-    return this.session.prepareQuery(
-      this.dialect.sqlToQuery(this.getSQL()),
-      this.config.returning,
-      void 0,
-      void 0,
-      void 0,
-      {
-        type: "delete",
-        tables: (0, import_utils2.extractUsedTable)(this.config.table)
-      }
-    );
+  /** @internal */
+  _prepare(name) {
+    const query = this.session.prepareQuery(this.dialect.sqlToQuery(this.getSQL()), this.config.returning, name, true, void 0, {
+      type: "insert",
+      tables: (0, import_utils2.extractUsedTable)(this.config.table)
+    }, this.cacheConfig);
+    query.joinsNotNullableMap = this.joinsNotNullableMap;
+    return query;
+  }
+  prepare(name) {
+    return this._prepare(name);
+  }
+  authToken;
+  /** @internal */
+  setToken(token) {
+    this.authToken = token;
+    return this;
   }
   execute = (placeholderValues) => {
-    return this.prepare().execute(placeholderValues);
+    return this._prepare().execute(placeholderValues, this.authToken);
   };
-  createIterator = () => {
-    const self = this;
-    return async function* (placeholderValues) {
-      yield* self.prepare().iterator(placeholderValues);
-    };
-  };
-  iterator = this.createIterator();
+  /** @internal */
+  getSelectedFields() {
+    return this.config.returningFields ? new Proxy(
+      this.config.returningFields,
+      new import_selection_proxy.SelectionProxyHandler({
+        alias: (0, import_table2.getTableName)(this.config.table),
+        sqlAliasedBehavior: "alias",
+        sqlBehavior: "error"
+      })
+    ) : void 0;
+  }
   $dynamic() {
     return this;
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreUpdateBase,
-  SingleStoreUpdateBuilder
+  PgUpdateBase,
+  PgUpdateBuilder
 });
 //# sourceMappingURL=update.cjs.map

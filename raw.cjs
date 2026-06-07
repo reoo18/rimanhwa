@@ -18,25 +18,26 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var raw_exports = {};
 __export(raw_exports, {
-  SQLiteRaw: () => SQLiteRaw
+  PgRaw: () => PgRaw
 });
 module.exports = __toCommonJS(raw_exports);
 var import_entity = require("../../entity.cjs");
 var import_query_promise = require("../../query-promise.cjs");
-class SQLiteRaw extends import_query_promise.QueryPromise {
-  constructor(execute, getSQL, action, dialect, mapBatchResult) {
+class PgRaw extends import_query_promise.QueryPromise {
+  constructor(execute, sql, query, mapBatchResult) {
     super();
     this.execute = execute;
-    this.getSQL = getSQL;
-    this.dialect = dialect;
+    this.sql = sql;
+    this.query = query;
     this.mapBatchResult = mapBatchResult;
-    this.config = { action };
   }
-  static [import_entity.entityKind] = "SQLiteRaw";
+  static [import_entity.entityKind] = "PgRaw";
   /** @internal */
-  config;
+  getSQL() {
+    return this.sql;
+  }
   getQuery() {
-    return { ...this.dialect.sqlToQuery(this.getSQL()), method: this.config.action };
+    return this.query;
   }
   mapResult(result, isFromBatch) {
     return isFromBatch ? this.mapBatchResult(result) : result;
@@ -51,6 +52,6 @@ class SQLiteRaw extends import_query_promise.QueryPromise {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SQLiteRaw
+  PgRaw
 });
 //# sourceMappingURL=raw.cjs.map

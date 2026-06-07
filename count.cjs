@@ -18,34 +18,40 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var count_exports = {};
 __export(count_exports, {
-  SingleStoreCountBuilder: () => SingleStoreCountBuilder
+  PgCountBuilder: () => PgCountBuilder
 });
 module.exports = __toCommonJS(count_exports);
 var import_entity = require("../../entity.cjs");
 var import_sql = require("../../sql/sql.cjs");
-class SingleStoreCountBuilder extends import_sql.SQL {
+class PgCountBuilder extends import_sql.SQL {
   constructor(params) {
-    super(SingleStoreCountBuilder.buildEmbeddedCount(params.source, params.filters).queryChunks);
+    super(PgCountBuilder.buildEmbeddedCount(params.source, params.filters).queryChunks);
     this.params = params;
     this.mapWith(Number);
     this.session = params.session;
-    this.sql = SingleStoreCountBuilder.buildCount(
+    this.sql = PgCountBuilder.buildCount(
       params.source,
       params.filters
     );
   }
   sql;
-  static [import_entity.entityKind] = "SingleStoreCountBuilder";
-  [Symbol.toStringTag] = "SingleStoreCountBuilder";
+  token;
+  static [import_entity.entityKind] = "PgCountBuilder";
+  [Symbol.toStringTag] = "PgCountBuilder";
   session;
   static buildEmbeddedCount(source, filters) {
     return import_sql.sql`(select count(*) from ${source}${import_sql.sql.raw(" where ").if(filters)}${filters})`;
   }
   static buildCount(source, filters) {
-    return import_sql.sql`select count(*) as count from ${source}${import_sql.sql.raw(" where ").if(filters)}${filters}`;
+    return import_sql.sql`select count(*) as count from ${source}${import_sql.sql.raw(" where ").if(filters)}${filters};`;
+  }
+  /** @intrnal */
+  setToken(token) {
+    this.token = token;
+    return this;
   }
   then(onfulfilled, onrejected) {
-    return Promise.resolve(this.session.count(this.sql)).then(
+    return Promise.resolve(this.session.count(this.sql, this.token)).then(
       onfulfilled,
       onrejected
     );
@@ -68,6 +74,6 @@ class SingleStoreCountBuilder extends import_sql.SQL {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreCountBuilder
+  PgCountBuilder
 });
 //# sourceMappingURL=count.cjs.map

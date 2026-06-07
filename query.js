@@ -3,6 +3,7 @@ import { QueryPromise } from "../../query-promise.js";
 import {
   mapRelationalRow
 } from "../../relations.js";
+import { tracer } from "../../tracing.js";
 class RelationalQueryBuilder {
   constructor(fullSchema, schema, tableNamesMap, table, tableConfig, dialect, session) {
     this.fullSchema = fullSchema;
@@ -13,9 +14,9 @@ class RelationalQueryBuilder {
     this.dialect = dialect;
     this.session = session;
   }
-  static [entityKind] = "SingleStoreRelationalQueryBuilder";
+  static [entityKind] = "PgRelationalQueryBuilder";
   findMany(config) {
-    return new SingleStoreRelationalQuery(
+    return new PgRelationalQuery(
       this.fullSchema,
       this.schema,
       this.tableNamesMap,
@@ -28,7 +29,7 @@ class RelationalQueryBuilder {
     );
   }
   findFirst(config) {
-    return new SingleStoreRelationalQuery(
+    return new PgRelationalQuery(
       this.fullSchema,
       this.schema,
       this.tableNamesMap,
@@ -41,8 +42,8 @@ class RelationalQueryBuilder {
     );
   }
 }
-class SingleStoreRelationalQuery extends QueryPromise {
-  constructor(fullSchema, schema, tableNamesMap, table, tableConfig, dialect, session, config, queryMode) {
+class PgRelationalQuery extends QueryPromise {
+  constructor(fullSchema, schema, tableNamesMap, table, tableConfig, dialect, session, config, mode) {
     super();
     this.fullSchema = fullSchema;
     this.schema = schema;
@@ -52,25 +53,35 @@ class SingleStoreRelationalQuery extends QueryPromise {
     this.dialect = dialect;
     this.session = session;
     this.config = config;
-    this.queryMode = queryMode;
+    this.mode = mode;
   }
-  static [entityKind] = "SingleStoreRelationalQuery";
-  prepare() {
-    const { query, builtQuery } = this._toSQL();
-    return this.session.prepareQuery(
-      builtQuery,
-      void 0,
-      (rawRows) => {
-        const rows = rawRows.map((row) => mapRelationalRow(this.schema, this.tableConfig, row, query.selection));
-        if (this.queryMode === "first") {
-          return rows[0];
+  static [entityKind] = "PgRelationalQuery";
+  /** @internal */
+  _prepare(name) {
+    return tracer.startActiveSpan("drizzle.prepareQuery", () => {
+      const { query, builtQuery } = this._toSQL();
+      return this.session.prepareQuery(
+        builtQuery,
+        void 0,
+        name,
+        true,
+        (rawRows, mapColumnValue) => {
+          const rows = rawRows.map(
+            (row) => mapRelationalRow(this.schema, this.tableConfig, row, query.selection, mapColumnValue)
+          );
+          if (this.mode === "first") {
+            return rows[0];
+          }
+          return rows;
         }
-        return rows;
-      }
-    );
+      );
+    });
+  }
+  prepare(name) {
+    return this._prepare(name);
   }
   _getQuery() {
-    return this.dialect.buildRelationalQuery({
+    return this.dialect.buildRelationalQueryWithoutPK({
       fullSchema: this.fullSchema,
       schema: this.schema,
       tableNamesMap: this.tableNamesMap,
@@ -80,24 +91,32 @@ class SingleStoreRelationalQuery extends QueryPromise {
       tableAlias: this.tableConfig.tsName
     });
   }
-  _toSQL() {
-    const query = this._getQuery();
-    const builtQuery = this.dialect.sqlToQuery(query.sql);
-    return { builtQuery, query };
-  }
   /** @internal */
   getSQL() {
     return this._getQuery().sql;
   }
+  _toSQL() {
+    const query = this._getQuery();
+    const builtQuery = this.dialect.sqlToQuery(query.sql);
+    return { query, builtQuery };
+  }
   toSQL() {
     return this._toSQL().builtQuery;
   }
+  authToken;
+  /** @internal */
+  setToken(token) {
+    this.authToken = token;
+    return this;
+  }
   execute() {
-    return this.prepare().execute();
+    return tracer.startActiveSpan("drizzle.operation", () => {
+      return this._prepare().execute(void 0, this.authToken);
+    });
   }
 }
 export {
-  RelationalQueryBuilder,
-  SingleStoreRelationalQuery
+  PgRelationalQuery,
+  RelationalQueryBuilder
 };
 //# sourceMappingURL=query.js.map

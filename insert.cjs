@@ -18,26 +18,36 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var insert_exports = {};
 __export(insert_exports, {
-  SingleStoreInsertBase: () => SingleStoreInsertBase,
-  SingleStoreInsertBuilder: () => SingleStoreInsertBuilder
+  PgInsertBase: () => PgInsertBase,
+  PgInsertBuilder: () => PgInsertBuilder
 });
 module.exports = __toCommonJS(insert_exports);
 var import_entity = require("../../entity.cjs");
 var import_query_promise = require("../../query-promise.cjs");
+var import_selection_proxy = require("../../selection-proxy.cjs");
 var import_sql = require("../../sql/sql.cjs");
 var import_table = require("../../table.cjs");
+var import_tracing = require("../../tracing.cjs");
 var import_utils = require("../../utils.cjs");
 var import_utils2 = require("../utils.cjs");
-class SingleStoreInsertBuilder {
-  constructor(table, session, dialect) {
+var import_query_builder = require("./query-builder.cjs");
+class PgInsertBuilder {
+  constructor(table, session, dialect, withList, overridingSystemValue_) {
     this.table = table;
     this.session = session;
     this.dialect = dialect;
+    this.withList = withList;
+    this.overridingSystemValue_ = overridingSystemValue_;
   }
-  static [import_entity.entityKind] = "SingleStoreInsertBuilder";
-  shouldIgnore = false;
-  ignore() {
-    this.shouldIgnore = true;
+  static [import_entity.entityKind] = "PgInsertBuilder";
+  authToken;
+  /** @internal */
+  setToken(token) {
+    this.authToken = token;
+    return this;
+  }
+  overridingSystemValue() {
+    this.overridingSystemValue_ = true;
     return this;
   }
   values(values) {
@@ -54,98 +64,167 @@ class SingleStoreInsertBuilder {
       }
       return result;
     });
-    return new SingleStoreInsertBase(this.table, mappedValues, this.shouldIgnore, this.session, this.dialect);
+    return new PgInsertBase(
+      this.table,
+      mappedValues,
+      this.session,
+      this.dialect,
+      this.withList,
+      false,
+      this.overridingSystemValue_
+    ).setToken(this.authToken);
+  }
+  select(selectQuery) {
+    const select = typeof selectQuery === "function" ? selectQuery(new import_query_builder.QueryBuilder()) : selectQuery;
+    if (!(0, import_entity.is)(select, import_sql.SQL) && !(0, import_utils.haveSameKeys)(this.table[import_table.Columns], select._.selectedFields)) {
+      throw new Error(
+        "Insert select error: selected fields are not the same or are in a different order compared to the table definition"
+      );
+    }
+    return new PgInsertBase(this.table, select, this.session, this.dialect, this.withList, true);
   }
 }
-class SingleStoreInsertBase extends import_query_promise.QueryPromise {
-  constructor(table, values, ignore, session, dialect) {
+class PgInsertBase extends import_query_promise.QueryPromise {
+  constructor(table, values, session, dialect, withList, select, overridingSystemValue_) {
     super();
     this.session = session;
     this.dialect = dialect;
-    this.config = { table, values, ignore };
+    this.config = { table, values, withList, select, overridingSystemValue_ };
   }
-  static [import_entity.entityKind] = "SingleStoreInsert";
+  static [import_entity.entityKind] = "PgInsert";
   config;
+  cacheConfig;
+  returning(fields = this.config.table[import_table.Table.Symbol.Columns]) {
+    this.config.returningFields = fields;
+    this.config.returning = (0, import_utils.orderSelectedFields)(fields);
+    return this;
+  }
   /**
-   * Adds an `on duplicate key update` clause to the query.
+   * Adds an `on conflict do nothing` clause to the query.
    *
-   * Calling this method will update update the row if any unique index conflicts. MySQL will automatically determine the conflict target based on the primary key and unique indexes.
+   * Calling this method simply avoids inserting a row as its alternative action.
    *
-   * See docs: {@link https://orm.drizzle.team/docs/insert#on-duplicate-key-update}
+   * See docs: {@link https://orm.drizzle.team/docs/insert#on-conflict-do-nothing}
    *
-   * @param config The `set` clause
+   * @param config The `target` and `where` clauses.
    *
    * @example
    * ```ts
-   * await db.insert(cars)
-   *   .values({ id: 1, brand: 'BMW'})
-   *   .onDuplicateKeyUpdate({ set: { brand: 'Porsche' }});
-   * ```
-   *
-   * While MySQL does not directly support doing nothing on conflict, you can perform a no-op by setting any column's value to itself and achieve the same effect:
-   *
-   * ```ts
-   * import { sql } from 'drizzle-orm';
-   *
+   * // Insert one row and cancel the insert if there's a conflict
    * await db.insert(cars)
    *   .values({ id: 1, brand: 'BMW' })
-   *   .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+   *   .onConflictDoNothing();
+   *
+   * // Explicitly specify conflict target
+   * await db.insert(cars)
+   *   .values({ id: 1, brand: 'BMW' })
+   *   .onConflictDoNothing({ target: cars.id });
    * ```
    */
-  onDuplicateKeyUpdate(config) {
-    const setSql = this.dialect.buildUpdateSet(this.config.table, (0, import_utils.mapUpdateSet)(this.config.table, config.set));
-    this.config.onConflict = import_sql.sql`update ${setSql}`;
+  onConflictDoNothing(config = {}) {
+    if (config.target === void 0) {
+      this.config.onConflict = import_sql.sql`do nothing`;
+    } else {
+      let targetColumn = "";
+      targetColumn = Array.isArray(config.target) ? config.target.map((it) => this.dialect.escapeName(this.dialect.casing.getColumnCasing(it))).join(",") : this.dialect.escapeName(this.dialect.casing.getColumnCasing(config.target));
+      const whereSql = config.where ? import_sql.sql` where ${config.where}` : void 0;
+      this.config.onConflict = import_sql.sql`(${import_sql.sql.raw(targetColumn)})${whereSql} do nothing`;
+    }
     return this;
   }
-  $returningId() {
-    const returning = [];
-    for (const [key, value] of Object.entries(this.config.table[import_table.Table.Symbol.Columns])) {
-      if (value.primary) {
-        returning.push({ field: value, path: [key] });
-      }
+  /**
+   * Adds an `on conflict do update` clause to the query.
+   *
+   * Calling this method will update the existing row that conflicts with the row proposed for insertion as its alternative action.
+   *
+   * See docs: {@link https://orm.drizzle.team/docs/insert#upserts-and-conflicts}
+   *
+   * @param config The `target`, `set` and `where` clauses.
+   *
+   * @example
+   * ```ts
+   * // Update the row if there's a conflict
+   * await db.insert(cars)
+   *   .values({ id: 1, brand: 'BMW' })
+   *   .onConflictDoUpdate({
+   *     target: cars.id,
+   *     set: { brand: 'Porsche' }
+   *   });
+   *
+   * // Upsert with 'where' clause
+   * await db.insert(cars)
+   *   .values({ id: 1, brand: 'BMW' })
+   *   .onConflictDoUpdate({
+   *     target: cars.id,
+   *     set: { brand: 'newBMW' },
+   *     targetWhere: sql`${cars.createdAt} > '2023-01-01'::date`,
+   *   });
+   * ```
+   */
+  onConflictDoUpdate(config) {
+    if (config.where && (config.targetWhere || config.setWhere)) {
+      throw new Error(
+        'You cannot use both "where" and "targetWhere"/"setWhere" at the same time - "where" is deprecated, use "targetWhere" or "setWhere" instead.'
+      );
     }
-    this.config.returning = (0, import_utils.orderSelectedFields)(this.config.table[import_table.Table.Symbol.Columns]);
+    const whereSql = config.where ? import_sql.sql` where ${config.where}` : void 0;
+    const targetWhereSql = config.targetWhere ? import_sql.sql` where ${config.targetWhere}` : void 0;
+    const setWhereSql = config.setWhere ? import_sql.sql` where ${config.setWhere}` : void 0;
+    const setSql = this.dialect.buildUpdateSet(this.config.table, (0, import_utils.mapUpdateSet)(this.config.table, config.set));
+    let targetColumn = "";
+    targetColumn = Array.isArray(config.target) ? config.target.map((it) => this.dialect.escapeName(this.dialect.casing.getColumnCasing(it))).join(",") : this.dialect.escapeName(this.dialect.casing.getColumnCasing(config.target));
+    this.config.onConflict = import_sql.sql`(${import_sql.sql.raw(targetColumn)})${targetWhereSql} do update set ${setSql}${whereSql}${setWhereSql}`;
     return this;
   }
   /** @internal */
   getSQL() {
-    return this.dialect.buildInsertQuery(this.config).sql;
+    return this.dialect.buildInsertQuery(this.config);
   }
   toSQL() {
     const { typings: _typings, ...rest } = this.dialect.sqlToQuery(this.getSQL());
     return rest;
   }
-  prepare() {
-    const { sql: sql2, generatedIds } = this.dialect.buildInsertQuery(this.config);
-    return this.session.prepareQuery(
-      this.dialect.sqlToQuery(sql2),
-      void 0,
-      void 0,
-      generatedIds,
-      this.config.returning,
-      {
-        type: "delete",
+  /** @internal */
+  _prepare(name) {
+    return import_tracing.tracer.startActiveSpan("drizzle.prepareQuery", () => {
+      return this.session.prepareQuery(this.dialect.sqlToQuery(this.getSQL()), this.config.returning, name, true, void 0, {
+        type: "insert",
         tables: (0, import_utils2.extractUsedTable)(this.config.table)
-      }
-    );
+      }, this.cacheConfig);
+    });
+  }
+  prepare(name) {
+    return this._prepare(name);
+  }
+  authToken;
+  /** @internal */
+  setToken(token) {
+    this.authToken = token;
+    return this;
   }
   execute = (placeholderValues) => {
-    return this.prepare().execute(placeholderValues);
+    return import_tracing.tracer.startActiveSpan("drizzle.operation", () => {
+      return this._prepare().execute(placeholderValues, this.authToken);
+    });
   };
-  createIterator = () => {
-    const self = this;
-    return async function* (placeholderValues) {
-      yield* self.prepare().iterator(placeholderValues);
-    };
-  };
-  iterator = this.createIterator();
+  /** @internal */
+  getSelectedFields() {
+    return this.config.returningFields ? new Proxy(
+      this.config.returningFields,
+      new import_selection_proxy.SelectionProxyHandler({
+        alias: (0, import_table.getTableName)(this.config.table),
+        sqlAliasedBehavior: "alias",
+        sqlBehavior: "error"
+      })
+    ) : void 0;
+  }
   $dynamic() {
     return this;
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreInsertBase,
-  SingleStoreInsertBuilder
+  PgInsertBase,
+  PgInsertBuilder
 });
 //# sourceMappingURL=insert.cjs.map

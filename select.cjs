@@ -18,27 +18,32 @@ var __copyProps = (to, from, except2, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var select_exports = {};
 __export(select_exports, {
-  SingleStoreSelectBase: () => SingleStoreSelectBase,
-  SingleStoreSelectBuilder: () => SingleStoreSelectBuilder,
-  SingleStoreSelectQueryBuilderBase: () => SingleStoreSelectQueryBuilderBase,
+  PgSelectBase: () => PgSelectBase,
+  PgSelectBuilder: () => PgSelectBuilder,
+  PgSelectQueryBuilderBase: () => PgSelectQueryBuilderBase,
   except: () => except,
+  exceptAll: () => exceptAll,
   intersect: () => intersect,
-  minus: () => minus,
+  intersectAll: () => intersectAll,
   union: () => union,
   unionAll: () => unionAll
 });
 module.exports = __toCommonJS(select_exports);
 var import_entity = require("../../entity.cjs");
+var import_view_base = require("../view-base.cjs");
 var import_query_builder = require("../../query-builders/query-builder.cjs");
 var import_query_promise = require("../../query-promise.cjs");
 var import_selection_proxy = require("../../selection-proxy.cjs");
 var import_sql = require("../../sql/sql.cjs");
 var import_subquery = require("../../subquery.cjs");
 var import_table = require("../../table.cjs");
+var import_tracing = require("../../tracing.cjs");
 var import_utils = require("../../utils.cjs");
-var import_utils2 = require("../utils.cjs");
-class SingleStoreSelectBuilder {
-  static [import_entity.entityKind] = "SingleStoreSelectBuilder";
+var import_utils2 = require("../../utils.cjs");
+var import_view_common = require("../../view-common.cjs");
+var import_utils3 = require("../utils.cjs");
+class PgSelectBuilder {
+  static [import_entity.entityKind] = "PgSelectBuilder";
   fields;
   session;
   dialect;
@@ -53,41 +58,53 @@ class SingleStoreSelectBuilder {
     }
     this.distinct = config.distinct;
   }
+  authToken;
+  /** @internal */
+  setToken(token) {
+    this.authToken = token;
+    return this;
+  }
+  /**
+   * Specify the table, subquery, or other target that you're
+   * building a select query against.
+   *
+   * {@link https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM | Postgres from documentation}
+   */
   from(source) {
     const isPartialSelect = !!this.fields;
+    const src = source;
     let fields;
     if (this.fields) {
       fields = this.fields;
-    } else if ((0, import_entity.is)(source, import_subquery.Subquery)) {
+    } else if ((0, import_entity.is)(src, import_subquery.Subquery)) {
       fields = Object.fromEntries(
-        Object.keys(source._.selectedFields).map((key) => [key, source[key]])
+        Object.keys(src._.selectedFields).map((key) => [key, src[key]])
       );
-    } else if ((0, import_entity.is)(source, import_sql.SQL)) {
+    } else if ((0, import_entity.is)(src, import_view_base.PgViewBase)) {
+      fields = src[import_view_common.ViewBaseConfig].selectedFields;
+    } else if ((0, import_entity.is)(src, import_sql.SQL)) {
       fields = {};
     } else {
-      fields = (0, import_utils.getTableColumns)(source);
+      fields = (0, import_utils.getTableColumns)(src);
     }
-    return new SingleStoreSelectBase(
-      {
-        table: source,
-        fields,
-        isPartialSelect,
-        session: this.session,
-        dialect: this.dialect,
-        withList: this.withList,
-        distinct: this.distinct
-      }
-    );
+    return new PgSelectBase({
+      table: src,
+      fields,
+      isPartialSelect,
+      session: this.session,
+      dialect: this.dialect,
+      withList: this.withList,
+      distinct: this.distinct
+    }).setToken(this.authToken);
   }
 }
-class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryBuilder {
-  static [import_entity.entityKind] = "SingleStoreSelectQueryBuilder";
+class PgSelectQueryBuilderBase extends import_query_builder.TypedQueryBuilder {
+  static [import_entity.entityKind] = "PgSelectQueryBuilder";
   _;
   config;
   joinsNotNullableMap;
   tableName;
   isPartialSelect;
-  /** @internal */
   session;
   dialect;
   cacheConfig = void 0;
@@ -110,7 +127,7 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
     };
     this.tableName = (0, import_utils.getTableLikeName)(table);
     this.joinsNotNullableMap = typeof this.tableName === "string" ? { [this.tableName]: true } : {};
-    for (const item of (0, import_utils2.extractUsedTable)(table)) this.usedTables.add(item);
+    for (const item of (0, import_utils3.extractUsedTable)(table)) this.usedTables.add(item);
   }
   /** @internal */
   getUsedTables() {
@@ -120,7 +137,7 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
     return (table, on) => {
       const baseTableName = this.tableName;
       const tableName = (0, import_utils.getTableLikeName)(table);
-      for (const item of (0, import_utils2.extractUsedTable)(table)) this.usedTables.add(item);
+      for (const item of (0, import_utils3.extractUsedTable)(table)) this.usedTables.add(item);
       if (typeof tableName === "string" && this.config.joins?.some((join) => join.alias === tableName)) {
         throw new Error(`Alias "${tableName}" is already used in this query`);
       }
@@ -131,7 +148,7 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
           };
         }
         if (typeof tableName === "string" && !(0, import_entity.is)(table, import_sql.SQL)) {
-          const selection = (0, import_entity.is)(table, import_subquery.Subquery) ? table._.selectedFields : table[import_table.Table.Symbol.Columns];
+          const selection = (0, import_entity.is)(table, import_subquery.Subquery) ? table._.selectedFields : (0, import_entity.is)(table, import_sql.View) ? table[import_view_common.ViewBaseConfig].selectedFields : table[import_table.Table.Symbol.Columns];
           this.config.fields[tableName] = selection;
         }
       }
@@ -356,7 +373,7 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
   crossJoinLateral = this.createJoin("cross", true);
   createSetOperator(type, isAll) {
     return (rightSelection) => {
-      const rightSelect = typeof rightSelection === "function" ? rightSelection(getSingleStoreSetOperators()) : rightSelection;
+      const rightSelect = typeof rightSelection === "function" ? rightSelection(getPgSetOperators()) : rightSelection;
       if (!(0, import_utils.haveSameKeys)(this.getSelectedFields(), rightSelect.getSelectedFields())) {
         throw new Error(
           "Set operator error (union / intersect / except): selected fields are not the same or are in a different order"
@@ -383,7 +400,7 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
    *     db.select({ name: customers.name }).from(customers)
    *   );
    * // or
-   * import { union } from 'drizzle-orm/singlestore-core'
+   * import { union } from 'drizzle-orm/pg-core'
    *
    * await union(
    *   db.select({ name: users.name }).from(users),
@@ -409,7 +426,7 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
    *     db.select({ transaction: inStoreSales.transactionId }).from(inStoreSales)
    *   );
    * // or
-   * import { unionAll } from 'drizzle-orm/singlestore-core'
+   * import { unionAll } from 'drizzle-orm/pg-core'
    *
    * await unionAll(
    *   db.select({ transaction: onlineSales.transactionId }).from(onlineSales),
@@ -435,7 +452,7 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
    *     db.select({ courseName: depB.courseName }).from(depB)
    *   );
    * // or
-   * import { intersect } from 'drizzle-orm/singlestore-core'
+   * import { intersect } from 'drizzle-orm/pg-core'
    *
    * await intersect(
    *   db.select({ courseName: depA.courseName }).from(depA),
@@ -444,6 +461,47 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
    * ```
    */
   intersect = this.createSetOperator("intersect", false);
+  /**
+   * Adds `intersect all` set operator to the query.
+   *
+   * Calling this method will retain only the rows that are present in both result sets including all duplicates.
+   *
+   * See docs: {@link https://orm.drizzle.team/docs/set-operations#intersect-all}
+   *
+   * @example
+   *
+   * ```ts
+   * // Select all products and quantities that are ordered by both regular and VIP customers
+   * await db.select({
+   *   productId: regularCustomerOrders.productId,
+   *   quantityOrdered: regularCustomerOrders.quantityOrdered
+   * })
+   * .from(regularCustomerOrders)
+   * .intersectAll(
+   *   db.select({
+   *     productId: vipCustomerOrders.productId,
+   *     quantityOrdered: vipCustomerOrders.quantityOrdered
+   *   })
+   *   .from(vipCustomerOrders)
+   * );
+   * // or
+   * import { intersectAll } from 'drizzle-orm/pg-core'
+   *
+   * await intersectAll(
+   *   db.select({
+   *     productId: regularCustomerOrders.productId,
+   *     quantityOrdered: regularCustomerOrders.quantityOrdered
+   *   })
+   *   .from(regularCustomerOrders),
+   *   db.select({
+   *     productId: vipCustomerOrders.productId,
+   *     quantityOrdered: vipCustomerOrders.quantityOrdered
+   *   })
+   *   .from(vipCustomerOrders)
+   * );
+   * ```
+   */
+  intersectAll = this.createSetOperator("intersect", true);
   /**
    * Adds `except` set operator to the query.
    *
@@ -461,7 +519,7 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
    *     db.select({ courseName: depB.courseName }).from(depB)
    *   );
    * // or
-   * import { except } from 'drizzle-orm/singlestore-core'
+   * import { except } from 'drizzle-orm/pg-core'
    *
    * await except(
    *   db.select({ courseName: depA.courseName }).from(depA),
@@ -471,29 +529,46 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
    */
   except = this.createSetOperator("except", false);
   /**
-   * Adds `minus` set operator to the query.
+   * Adds `except all` set operator to the query.
    *
-   * This is an alias of `except` supported by SingleStore.
+   * Calling this method will retrieve all rows from the left query, except for the rows that are present in the result set of the right query.
+   *
+   * See docs: {@link https://orm.drizzle.team/docs/set-operations#except-all}
    *
    * @example
    *
    * ```ts
-   * // Select all courses offered in department A but not in department B
-   * await db.select({ courseName: depA.courseName })
-   *   .from(depA)
-   *   .minus(
-   *     db.select({ courseName: depB.courseName }).from(depB)
-   *   );
+   * // Select all products that are ordered by regular customers but not by VIP customers
+   * await db.select({
+   *   productId: regularCustomerOrders.productId,
+   *   quantityOrdered: regularCustomerOrders.quantityOrdered,
+   * })
+   * .from(regularCustomerOrders)
+   * .exceptAll(
+   *   db.select({
+   *     productId: vipCustomerOrders.productId,
+   *     quantityOrdered: vipCustomerOrders.quantityOrdered,
+   *   })
+   *   .from(vipCustomerOrders)
+   * );
    * // or
-   * import { minus } from 'drizzle-orm/singlestore-core'
+   * import { exceptAll } from 'drizzle-orm/pg-core'
    *
-   * await minus(
-   *   db.select({ courseName: depA.courseName }).from(depA),
-   *   db.select({ courseName: depB.courseName }).from(depB)
+   * await exceptAll(
+   *   db.select({
+   *     productId: regularCustomerOrders.productId,
+   *     quantityOrdered: regularCustomerOrders.quantityOrdered
+   *   })
+   *   .from(regularCustomerOrders),
+   *   db.select({
+   *     productId: vipCustomerOrders.productId,
+   *     quantityOrdered: vipCustomerOrders.quantityOrdered
+   *   })
+   *   .from(vipCustomerOrders)
    * );
    * ```
    */
-  minus = this.createSetOperator("except", false);
+  exceptAll = this.createSetOperator("except", true);
   /** @internal */
   addSetOperators(setOperators) {
     this.config.setOperators.push(...setOperators);
@@ -665,6 +740,8 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
    *
    * Calling this method will specify a lock strength for this query that controls how strictly it acquires exclusive access to the rows being queried.
    *
+   * See docs: {@link https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE}
+   *
    * @param strength the lock strength.
    * @param config the lock configuration.
    */
@@ -682,9 +759,9 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
   }
   as(alias) {
     const usedTables = [];
-    usedTables.push(...(0, import_utils2.extractUsedTable)(this.config.table));
+    usedTables.push(...(0, import_utils3.extractUsedTable)(this.config.table));
     if (this.config.joins) {
-      for (const it of this.config.joins) usedTables.push(...(0, import_utils2.extractUsedTable)(it.table));
+      for (const it of this.config.joins) usedTables.push(...(0, import_utils3.extractUsedTable)(it.table));
     }
     return new Proxy(
       new import_subquery.Subquery(this.getSQL(), this.config.fields, alias, false, [...new Set(usedTables)]),
@@ -701,37 +778,53 @@ class SingleStoreSelectQueryBuilderBase extends import_query_builder.TypedQueryB
   $dynamic() {
     return this;
   }
-}
-class SingleStoreSelectBase extends SingleStoreSelectQueryBuilderBase {
-  static [import_entity.entityKind] = "SingleStoreSelect";
-  prepare() {
-    if (!this.session) {
-      throw new Error("Cannot execute a query on a query builder. Please use a database instance instead.");
-    }
-    const fieldsList = (0, import_utils.orderSelectedFields)(this.config.fields);
-    const query = this.session.prepareQuery(this.dialect.sqlToQuery(this.getSQL()), fieldsList, void 0, void 0, void 0, {
-      type: "select",
-      tables: [...this.usedTables]
-    }, this.cacheConfig);
-    query.joinsNotNullableMap = this.joinsNotNullableMap;
-    return query;
-  }
   $withCache(config) {
     this.cacheConfig = config === void 0 ? { config: {}, enable: true, autoInvalidate: true } : config === false ? { enable: false } : { enable: true, autoInvalidate: true, ...config };
     return this;
   }
-  execute = (placeholderValues) => {
-    return this.prepare().execute(placeholderValues);
-  };
-  createIterator = () => {
-    const self = this;
-    return async function* (placeholderValues) {
-      yield* self.prepare().iterator(placeholderValues);
-    };
-  };
-  iterator = this.createIterator();
 }
-(0, import_utils.applyMixins)(SingleStoreSelectBase, [import_query_promise.QueryPromise]);
+class PgSelectBase extends PgSelectQueryBuilderBase {
+  static [import_entity.entityKind] = "PgSelect";
+  /** @internal */
+  _prepare(name) {
+    const { session, config, dialect, joinsNotNullableMap, authToken, cacheConfig, usedTables } = this;
+    if (!session) {
+      throw new Error("Cannot execute a query on a query builder. Please use a database instance instead.");
+    }
+    const { fields } = config;
+    return import_tracing.tracer.startActiveSpan("drizzle.prepareQuery", () => {
+      const fieldsList = (0, import_utils2.orderSelectedFields)(fields);
+      const query = session.prepareQuery(dialect.sqlToQuery(this.getSQL()), fieldsList, name, true, void 0, {
+        type: "select",
+        tables: [...usedTables]
+      }, cacheConfig);
+      query.joinsNotNullableMap = joinsNotNullableMap;
+      return query.setToken(authToken);
+    });
+  }
+  /**
+   * Create a prepared statement for this query. This allows
+   * the database to remember this query for the given session
+   * and call it by name, rather than specifying the full query.
+   *
+   * {@link https://www.postgresql.org/docs/current/sql-prepare.html | Postgres prepare documentation}
+   */
+  prepare(name) {
+    return this._prepare(name);
+  }
+  authToken;
+  /** @internal */
+  setToken(token) {
+    this.authToken = token;
+    return this;
+  }
+  execute = (placeholderValues) => {
+    return import_tracing.tracer.startActiveSpan("drizzle.operation", () => {
+      return this._prepare().execute(placeholderValues, this.authToken);
+    });
+  };
+}
+(0, import_utils.applyMixins)(PgSelectBase, [import_query_promise.QueryPromise]);
 function createSetOperator(type, isAll) {
   return (leftSelect, rightSelect, ...restSelects) => {
     const setOperators = [rightSelect, ...restSelects].map((select) => ({
@@ -749,26 +842,29 @@ function createSetOperator(type, isAll) {
     return leftSelect.addSetOperators(setOperators);
   };
 }
-const getSingleStoreSetOperators = () => ({
+const getPgSetOperators = () => ({
   union,
   unionAll,
   intersect,
+  intersectAll,
   except,
-  minus
+  exceptAll
 });
 const union = createSetOperator("union", false);
 const unionAll = createSetOperator("union", true);
 const intersect = createSetOperator("intersect", false);
+const intersectAll = createSetOperator("intersect", true);
 const except = createSetOperator("except", false);
-const minus = createSetOperator("except", true);
+const exceptAll = createSetOperator("except", true);
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreSelectBase,
-  SingleStoreSelectBuilder,
-  SingleStoreSelectQueryBuilderBase,
+  PgSelectBase,
+  PgSelectBuilder,
+  PgSelectQueryBuilderBase,
   except,
+  exceptAll,
   intersect,
-  minus,
+  intersectAll,
   union,
   unionAll
 });

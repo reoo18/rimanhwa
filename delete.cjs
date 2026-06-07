@@ -18,24 +18,26 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var delete_exports = {};
 __export(delete_exports, {
-  SingleStoreDeleteBase: () => SingleStoreDeleteBase
+  PgDeleteBase: () => PgDeleteBase
 });
 module.exports = __toCommonJS(delete_exports);
 var import_entity = require("../../entity.cjs");
 var import_query_promise = require("../../query-promise.cjs");
 var import_selection_proxy = require("../../selection-proxy.cjs");
 var import_table = require("../../table.cjs");
-var import_utils = require("../utils.cjs");
-class SingleStoreDeleteBase extends import_query_promise.QueryPromise {
+var import_tracing = require("../../tracing.cjs");
+var import_utils = require("../../utils.cjs");
+var import_utils2 = require("../utils.cjs");
+class PgDeleteBase extends import_query_promise.QueryPromise {
   constructor(table, session, dialect, withList) {
     super();
-    this.table = table;
     this.session = session;
     this.dialect = dialect;
     this.config = { table, withList };
   }
-  static [import_entity.entityKind] = "SingleStoreDelete";
+  static [import_entity.entityKind] = "PgDelete";
   config;
+  cacheConfig;
   /**
    * Adds a `where` clause to the query.
    *
@@ -50,43 +52,28 @@ class SingleStoreDeleteBase extends import_query_promise.QueryPromise {
    *
    * ```ts
    * // Delete all cars with green color
-   * db.delete(cars).where(eq(cars.color, 'green'));
+   * await db.delete(cars).where(eq(cars.color, 'green'));
    * // or
-   * db.delete(cars).where(sql`${cars.color} = 'green'`)
+   * await db.delete(cars).where(sql`${cars.color} = 'green'`)
    * ```
    *
    * You can logically combine conditional operators with `and()` and `or()` operators:
    *
    * ```ts
    * // Delete all BMW cars with a green color
-   * db.delete(cars).where(and(eq(cars.color, 'green'), eq(cars.brand, 'BMW')));
+   * await db.delete(cars).where(and(eq(cars.color, 'green'), eq(cars.brand, 'BMW')));
    *
    * // Delete all cars with the green or blue color
-   * db.delete(cars).where(or(eq(cars.color, 'green'), eq(cars.color, 'blue')));
+   * await db.delete(cars).where(or(eq(cars.color, 'green'), eq(cars.color, 'blue')));
    * ```
    */
   where(where) {
     this.config.where = where;
     return this;
   }
-  orderBy(...columns) {
-    if (typeof columns[0] === "function") {
-      const orderBy = columns[0](
-        new Proxy(
-          this.config.table[import_table.Table.Symbol.Columns],
-          new import_selection_proxy.SelectionProxyHandler({ sqlAliasedBehavior: "alias", sqlBehavior: "sql" })
-        )
-      );
-      const orderByArray = Array.isArray(orderBy) ? orderBy : [orderBy];
-      this.config.orderBy = orderByArray;
-    } else {
-      const orderByArray = columns;
-      this.config.orderBy = orderByArray;
-    }
-    return this;
-  }
-  limit(limit) {
-    this.config.limit = limit;
+  returning(fields = this.config.table[import_table.Table.Symbol.Columns]) {
+    this.config.returningFields = fields;
+    this.config.returning = (0, import_utils.orderSelectedFields)(fields);
     return this;
   }
   /** @internal */
@@ -97,35 +84,46 @@ class SingleStoreDeleteBase extends import_query_promise.QueryPromise {
     const { typings: _typings, ...rest } = this.dialect.sqlToQuery(this.getSQL());
     return rest;
   }
-  prepare() {
-    return this.session.prepareQuery(
-      this.dialect.sqlToQuery(this.getSQL()),
-      this.config.returning,
-      void 0,
-      void 0,
-      void 0,
-      {
+  /** @internal */
+  _prepare(name) {
+    return import_tracing.tracer.startActiveSpan("drizzle.prepareQuery", () => {
+      return this.session.prepareQuery(this.dialect.sqlToQuery(this.getSQL()), this.config.returning, name, true, void 0, {
         type: "delete",
-        tables: (0, import_utils.extractUsedTable)(this.config.table)
-      }
-    );
+        tables: (0, import_utils2.extractUsedTable)(this.config.table)
+      }, this.cacheConfig);
+    });
+  }
+  prepare(name) {
+    return this._prepare(name);
+  }
+  authToken;
+  /** @internal */
+  setToken(token) {
+    this.authToken = token;
+    return this;
   }
   execute = (placeholderValues) => {
-    return this.prepare().execute(placeholderValues);
+    return import_tracing.tracer.startActiveSpan("drizzle.operation", () => {
+      return this._prepare().execute(placeholderValues, this.authToken);
+    });
   };
-  createIterator = () => {
-    const self = this;
-    return async function* (placeholderValues) {
-      yield* self.prepare().iterator(placeholderValues);
-    };
-  };
-  iterator = this.createIterator();
+  /** @internal */
+  getSelectedFields() {
+    return this.config.returningFields ? new Proxy(
+      this.config.returningFields,
+      new import_selection_proxy.SelectionProxyHandler({
+        alias: (0, import_table.getTableName)(this.config.table),
+        sqlAliasedBehavior: "alias",
+        sqlBehavior: "error"
+      })
+    ) : void 0;
+  }
   $dynamic() {
     return this;
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreDeleteBase
+  PgDeleteBase
 });
 //# sourceMappingURL=delete.cjs.map

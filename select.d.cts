@@ -1,19 +1,21 @@
 import type { CacheConfig, WithCacheConfig } from "../../cache/core/types.cjs";
 import { entityKind } from "../../entity.cjs";
+import type { PgColumn } from "../columns/index.cjs";
+import type { PgDialect } from "../dialect.cjs";
+import type { PgSession } from "../session.cjs";
+import type { SubqueryWithSelection } from "../subquery.cjs";
+import type { PgTable } from "../table.cjs";
+import { PgViewBase } from "../view-base.cjs";
 import { TypedQueryBuilder } from "../../query-builders/query-builder.cjs";
 import type { BuildSubquerySelection, GetSelectTableName, GetSelectTableSelection, JoinNullability, SelectMode, SelectResult } from "../../query-builders/select.types.cjs";
 import { QueryPromise } from "../../query-promise.cjs";
-import type { SingleStoreColumn } from "../columns/index.cjs";
-import type { SingleStoreDialect } from "../dialect.cjs";
-import type { PreparedQueryHKTBase, SingleStoreSession } from "../session.cjs";
-import type { SubqueryWithSelection } from "../subquery.cjs";
-import type { SingleStoreTable } from "../table.cjs";
-import type { ColumnsSelection, Query } from "../../sql/sql.cjs";
+import type { RunnableQuery } from "../../runnable-query.cjs";
 import { SQL } from "../../sql/sql.cjs";
+import type { ColumnsSelection, Placeholder, Query, SQLWrapper } from "../../sql/sql.cjs";
 import { Subquery } from "../../subquery.cjs";
-import { type ValueOrArray } from "../../utils.cjs";
-import type { CreateSingleStoreSelectFromBuilderMode, GetSingleStoreSetOperators, LockConfig, LockStrength, SelectedFields, SetOperatorRightSelect, SingleStoreCreateSetOperatorFn, SingleStoreCrossJoinFn, SingleStoreJoinFn, SingleStoreSelectConfig, SingleStoreSelectDynamic, SingleStoreSelectHKT, SingleStoreSelectHKTBase, SingleStoreSelectPrepare, SingleStoreSelectWithout, SingleStoreSetOperatorExcludedMethods, SingleStoreSetOperatorWithResult } from "./select.types.cjs";
-export declare class SingleStoreSelectBuilder<TSelection extends SelectedFields | undefined, TPreparedQueryHKT extends PreparedQueryHKTBase, TBuilderMode extends 'db' | 'qb' = 'db'> {
+import { type DrizzleTypeError, type ValueOrArray } from "../../utils.cjs";
+import type { CreatePgSelectFromBuilderMode, GetPgSetOperators, LockConfig, LockStrength, PgCreateSetOperatorFn, PgSelectConfig, PgSelectCrossJoinFn, PgSelectDynamic, PgSelectHKT, PgSelectHKTBase, PgSelectJoinFn, PgSelectPrepare, PgSelectWithout, PgSetOperatorExcludedMethods, PgSetOperatorWithResult, SelectedFields, SetOperatorRightSelect, TableLikeHasEmptySelection } from "./select.types.cjs";
+export declare class PgSelectBuilder<TSelection extends SelectedFields | undefined, TBuilderMode extends 'db' | 'qb' = 'db'> {
     static readonly [entityKind]: string;
     private fields;
     private session;
@@ -22,44 +24,55 @@ export declare class SingleStoreSelectBuilder<TSelection extends SelectedFields 
     private distinct;
     constructor(config: {
         fields: TSelection;
-        session: SingleStoreSession | undefined;
-        dialect: SingleStoreDialect;
+        session: PgSession | undefined;
+        dialect: PgDialect;
         withList?: Subquery[];
-        distinct?: boolean;
+        distinct?: boolean | {
+            on: (PgColumn | SQLWrapper)[];
+        };
     });
-    from<TFrom extends SingleStoreTable | Subquery | SQL>(// | SingleStoreViewBase
-    source: TFrom): CreateSingleStoreSelectFromBuilderMode<TBuilderMode, GetSelectTableName<TFrom>, TSelection extends undefined ? GetSelectTableSelection<TFrom> : TSelection, TSelection extends undefined ? 'single' : 'partial', TPreparedQueryHKT>;
+    private authToken?;
+    /**
+     * Specify the table, subquery, or other target that you're
+     * building a select query against.
+     *
+     * {@link https://www.postgresql.org/docs/current/sql-select.html#SQL-FROM | Postgres from documentation}
+     */
+    from<TFrom extends PgTable | Subquery | PgViewBase | SQL>(source: TableLikeHasEmptySelection<TFrom> extends true ? DrizzleTypeError<"Cannot reference a data-modifying statement subquery if it doesn't contain a `returning` clause"> : TFrom): CreatePgSelectFromBuilderMode<TBuilderMode, GetSelectTableName<TFrom>, TSelection extends undefined ? GetSelectTableSelection<TFrom> : TSelection, TSelection extends undefined ? 'single' : 'partial'>;
 }
-export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends SingleStoreSelectHKTBase, TTableName extends string | undefined, TSelection extends ColumnsSelection, TSelectMode extends SelectMode, TPreparedQueryHKT extends PreparedQueryHKTBase, TNullabilityMap extends Record<string, JoinNullability> = TTableName extends string ? Record<TTableName, 'not-null'> : {}, TDynamic extends boolean = false, TExcludedMethods extends string = never, TResult extends any[] = SelectResult<TSelection, TSelectMode, TNullabilityMap>[], TSelectedFields extends ColumnsSelection = BuildSubquerySelection<TSelection, TNullabilityMap>> extends TypedQueryBuilder<TSelectedFields, TResult> {
+export declare abstract class PgSelectQueryBuilderBase<THKT extends PgSelectHKTBase, TTableName extends string | undefined, TSelection extends ColumnsSelection, TSelectMode extends SelectMode, TNullabilityMap extends Record<string, JoinNullability> = TTableName extends string ? Record<TTableName, 'not-null'> : {}, TDynamic extends boolean = false, TExcludedMethods extends string = never, TResult extends any[] = SelectResult<TSelection, TSelectMode, TNullabilityMap>[], TSelectedFields extends ColumnsSelection = BuildSubquerySelection<TSelection, TNullabilityMap>> extends TypedQueryBuilder<TSelectedFields, TResult> {
     static readonly [entityKind]: string;
     readonly _: {
+        readonly dialect: 'pg';
         readonly hkt: THKT;
         readonly tableName: TTableName;
         readonly selection: TSelection;
         readonly selectMode: TSelectMode;
-        readonly preparedQueryHKT: TPreparedQueryHKT;
         readonly nullabilityMap: TNullabilityMap;
         readonly dynamic: TDynamic;
         readonly excludedMethods: TExcludedMethods;
         readonly result: TResult;
         readonly selectedFields: TSelectedFields;
-        readonly config: SingleStoreSelectConfig;
+        readonly config: PgSelectConfig;
     };
-    protected config: SingleStoreSelectConfig;
+    protected config: PgSelectConfig;
     protected joinsNotNullableMap: Record<string, boolean>;
-    private tableName;
+    protected tableName: string | undefined;
     private isPartialSelect;
-    protected dialect: SingleStoreDialect;
+    protected session: PgSession | undefined;
+    protected dialect: PgDialect;
     protected cacheConfig?: WithCacheConfig;
     protected usedTables: Set<string>;
     constructor({ table, fields, isPartialSelect, session, dialect, withList, distinct }: {
-        table: SingleStoreSelectConfig['table'];
-        fields: SingleStoreSelectConfig['fields'];
+        table: PgSelectConfig['table'];
+        fields: PgSelectConfig['fields'];
         isPartialSelect: boolean;
-        session: SingleStoreSession | undefined;
-        dialect: SingleStoreDialect;
+        session: PgSession | undefined;
+        dialect: PgDialect;
         withList: Subquery[];
-        distinct: boolean | undefined;
+        distinct: boolean | {
+            on: (PgColumn | SQLWrapper)[];
+        } | undefined;
     });
     private createJoin;
     /**
@@ -89,7 +102,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *   .leftJoin(pets, eq(users.id, pets.ownerId))
      * ```
      */
-    leftJoin: SingleStoreJoinFn<this, TDynamic, "left", false>;
+    leftJoin: PgSelectJoinFn<this, TDynamic, "left", false>;
     /**
      * Executes a `left join lateral` operation by adding subquery to the current query.
      *
@@ -102,7 +115,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      * @param table the subquery to join.
      * @param on the `on` clause.
      */
-    leftJoinLateral: SingleStoreJoinFn<this, TDynamic, "left", true>;
+    leftJoinLateral: PgSelectJoinFn<this, TDynamic, "left", true>;
     /**
      * Executes a `right join` operation by adding another table to the current query.
      *
@@ -130,7 +143,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *   .rightJoin(pets, eq(users.id, pets.ownerId))
      * ```
      */
-    rightJoin: SingleStoreJoinFn<this, TDynamic, "right", false>;
+    rightJoin: PgSelectJoinFn<this, TDynamic, "right", false>;
     /**
      * Executes an `inner join` operation, creating a new table by combining rows from two tables that have matching values.
      *
@@ -158,7 +171,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *   .innerJoin(pets, eq(users.id, pets.ownerId))
      * ```
      */
-    innerJoin: SingleStoreJoinFn<this, TDynamic, "inner", false>;
+    innerJoin: PgSelectJoinFn<this, TDynamic, "inner", false>;
     /**
      * Executes an `inner join lateral` operation, creating a new table by combining rows from two queries that have matching values.
      *
@@ -171,7 +184,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      * @param table the subquery to join.
      * @param on the `on` clause.
      */
-    innerJoinLateral: SingleStoreJoinFn<this, TDynamic, "inner", true>;
+    innerJoinLateral: PgSelectJoinFn<this, TDynamic, "inner", true>;
     /**
      * Executes a `full join` operation by combining rows from two tables into a new table.
      *
@@ -199,7 +212,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *   .fullJoin(pets, eq(users.id, pets.ownerId))
      * ```
      */
-    fullJoin: SingleStoreJoinFn<this, TDynamic, "full", false>;
+    fullJoin: PgSelectJoinFn<this, TDynamic, "full", false>;
     /**
      * Executes a `cross join` operation by combining rows from two tables into a new table.
      *
@@ -226,7 +239,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *   .crossJoin(pets)
      * ```
      */
-    crossJoin: SingleStoreCrossJoinFn<this, TDynamic, false>;
+    crossJoin: PgSelectCrossJoinFn<this, TDynamic, false>;
     /**
      * Executes a `cross join lateral` operation by combining rows from two queries into a new table.
      *
@@ -238,7 +251,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *
      * @param table the query to join.
      */
-    crossJoinLateral: SingleStoreCrossJoinFn<this, TDynamic, true>;
+    crossJoinLateral: PgSelectCrossJoinFn<this, TDynamic, true>;
     private createSetOperator;
     /**
      * Adds `union` set operator to the query.
@@ -257,7 +270,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *     db.select({ name: customers.name }).from(customers)
      *   );
      * // or
-     * import { union } from 'drizzle-orm/singlestore-core'
+     * import { union } from 'drizzle-orm/pg-core'
      *
      * await union(
      *   db.select({ name: users.name }).from(users),
@@ -265,7 +278,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      * );
      * ```
      */
-    union: <TValue extends SingleStoreSetOperatorWithResult<TResult>>(rightSelection: ((setOperators: GetSingleStoreSetOperators) => SetOperatorRightSelect<TValue, TResult>) | SetOperatorRightSelect<TValue, TResult>) => SingleStoreSelectWithout<this, TDynamic, SingleStoreSetOperatorExcludedMethods, true>;
+    union: <TValue extends PgSetOperatorWithResult<TResult>>(rightSelection: ((setOperators: GetPgSetOperators) => SetOperatorRightSelect<TValue, TResult>) | SetOperatorRightSelect<TValue, TResult>) => PgSelectWithout<this, TDynamic, PgSetOperatorExcludedMethods, true>;
     /**
      * Adds `union all` set operator to the query.
      *
@@ -283,7 +296,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *     db.select({ transaction: inStoreSales.transactionId }).from(inStoreSales)
      *   );
      * // or
-     * import { unionAll } from 'drizzle-orm/singlestore-core'
+     * import { unionAll } from 'drizzle-orm/pg-core'
      *
      * await unionAll(
      *   db.select({ transaction: onlineSales.transactionId }).from(onlineSales),
@@ -291,7 +304,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      * );
      * ```
      */
-    unionAll: <TValue extends SingleStoreSetOperatorWithResult<TResult>>(rightSelection: ((setOperators: GetSingleStoreSetOperators) => SetOperatorRightSelect<TValue, TResult>) | SetOperatorRightSelect<TValue, TResult>) => SingleStoreSelectWithout<this, TDynamic, SingleStoreSetOperatorExcludedMethods, true>;
+    unionAll: <TValue extends PgSetOperatorWithResult<TResult>>(rightSelection: ((setOperators: GetPgSetOperators) => SetOperatorRightSelect<TValue, TResult>) | SetOperatorRightSelect<TValue, TResult>) => PgSelectWithout<this, TDynamic, PgSetOperatorExcludedMethods, true>;
     /**
      * Adds `intersect` set operator to the query.
      *
@@ -309,7 +322,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *     db.select({ courseName: depB.courseName }).from(depB)
      *   );
      * // or
-     * import { intersect } from 'drizzle-orm/singlestore-core'
+     * import { intersect } from 'drizzle-orm/pg-core'
      *
      * await intersect(
      *   db.select({ courseName: depA.courseName }).from(depA),
@@ -317,7 +330,48 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      * );
      * ```
      */
-    intersect: <TValue extends SingleStoreSetOperatorWithResult<TResult>>(rightSelection: ((setOperators: GetSingleStoreSetOperators) => SetOperatorRightSelect<TValue, TResult>) | SetOperatorRightSelect<TValue, TResult>) => SingleStoreSelectWithout<this, TDynamic, SingleStoreSetOperatorExcludedMethods, true>;
+    intersect: <TValue extends PgSetOperatorWithResult<TResult>>(rightSelection: ((setOperators: GetPgSetOperators) => SetOperatorRightSelect<TValue, TResult>) | SetOperatorRightSelect<TValue, TResult>) => PgSelectWithout<this, TDynamic, PgSetOperatorExcludedMethods, true>;
+    /**
+     * Adds `intersect all` set operator to the query.
+     *
+     * Calling this method will retain only the rows that are present in both result sets including all duplicates.
+     *
+     * See docs: {@link https://orm.drizzle.team/docs/set-operations#intersect-all}
+     *
+     * @example
+     *
+     * ```ts
+     * // Select all products and quantities that are ordered by both regular and VIP customers
+     * await db.select({
+     *   productId: regularCustomerOrders.productId,
+     *   quantityOrdered: regularCustomerOrders.quantityOrdered
+     * })
+     * .from(regularCustomerOrders)
+     * .intersectAll(
+     *   db.select({
+     *     productId: vipCustomerOrders.productId,
+     *     quantityOrdered: vipCustomerOrders.quantityOrdered
+     *   })
+     *   .from(vipCustomerOrders)
+     * );
+     * // or
+     * import { intersectAll } from 'drizzle-orm/pg-core'
+     *
+     * await intersectAll(
+     *   db.select({
+     *     productId: regularCustomerOrders.productId,
+     *     quantityOrdered: regularCustomerOrders.quantityOrdered
+     *   })
+     *   .from(regularCustomerOrders),
+     *   db.select({
+     *     productId: vipCustomerOrders.productId,
+     *     quantityOrdered: vipCustomerOrders.quantityOrdered
+     *   })
+     *   .from(vipCustomerOrders)
+     * );
+     * ```
+     */
+    intersectAll: <TValue extends PgSetOperatorWithResult<TResult>>(rightSelection: ((setOperators: GetPgSetOperators) => SetOperatorRightSelect<TValue, TResult>) | SetOperatorRightSelect<TValue, TResult>) => PgSelectWithout<this, TDynamic, PgSetOperatorExcludedMethods, true>;
     /**
      * Adds `except` set operator to the query.
      *
@@ -335,7 +389,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *     db.select({ courseName: depB.courseName }).from(depB)
      *   );
      * // or
-     * import { except } from 'drizzle-orm/singlestore-core'
+     * import { except } from 'drizzle-orm/pg-core'
      *
      * await except(
      *   db.select({ courseName: depA.courseName }).from(depA),
@@ -343,31 +397,48 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      * );
      * ```
      */
-    except: <TValue extends SingleStoreSetOperatorWithResult<TResult>>(rightSelection: ((setOperators: GetSingleStoreSetOperators) => SetOperatorRightSelect<TValue, TResult>) | SetOperatorRightSelect<TValue, TResult>) => SingleStoreSelectWithout<this, TDynamic, SingleStoreSetOperatorExcludedMethods, true>;
+    except: <TValue extends PgSetOperatorWithResult<TResult>>(rightSelection: ((setOperators: GetPgSetOperators) => SetOperatorRightSelect<TValue, TResult>) | SetOperatorRightSelect<TValue, TResult>) => PgSelectWithout<this, TDynamic, PgSetOperatorExcludedMethods, true>;
     /**
-     * Adds `minus` set operator to the query.
+     * Adds `except all` set operator to the query.
      *
-     * This is an alias of `except` supported by SingleStore.
+     * Calling this method will retrieve all rows from the left query, except for the rows that are present in the result set of the right query.
+     *
+     * See docs: {@link https://orm.drizzle.team/docs/set-operations#except-all}
      *
      * @example
      *
      * ```ts
-     * // Select all courses offered in department A but not in department B
-     * await db.select({ courseName: depA.courseName })
-     *   .from(depA)
-     *   .minus(
-     *     db.select({ courseName: depB.courseName }).from(depB)
-     *   );
+     * // Select all products that are ordered by regular customers but not by VIP customers
+     * await db.select({
+     *   productId: regularCustomerOrders.productId,
+     *   quantityOrdered: regularCustomerOrders.quantityOrdered,
+     * })
+     * .from(regularCustomerOrders)
+     * .exceptAll(
+     *   db.select({
+     *     productId: vipCustomerOrders.productId,
+     *     quantityOrdered: vipCustomerOrders.quantityOrdered,
+     *   })
+     *   .from(vipCustomerOrders)
+     * );
      * // or
-     * import { minus } from 'drizzle-orm/singlestore-core'
+     * import { exceptAll } from 'drizzle-orm/pg-core'
      *
-     * await minus(
-     *   db.select({ courseName: depA.courseName }).from(depA),
-     *   db.select({ courseName: depB.courseName }).from(depB)
+     * await exceptAll(
+     *   db.select({
+     *     productId: regularCustomerOrders.productId,
+     *     quantityOrdered: regularCustomerOrders.quantityOrdered
+     *   })
+     *   .from(regularCustomerOrders),
+     *   db.select({
+     *     productId: vipCustomerOrders.productId,
+     *     quantityOrdered: vipCustomerOrders.quantityOrdered
+     *   })
+     *   .from(vipCustomerOrders)
      * );
      * ```
      */
-    minus: <TValue extends SingleStoreSetOperatorWithResult<TResult>>(rightSelection: ((setOperators: GetSingleStoreSetOperators) => SetOperatorRightSelect<TValue, TResult>) | SetOperatorRightSelect<TValue, TResult>) => SingleStoreSelectWithout<this, TDynamic, SingleStoreSetOperatorExcludedMethods, true>;
+    exceptAll: <TValue extends PgSetOperatorWithResult<TResult>>(rightSelection: ((setOperators: GetPgSetOperators) => SetOperatorRightSelect<TValue, TResult>) | SetOperatorRightSelect<TValue, TResult>) => PgSelectWithout<this, TDynamic, PgSetOperatorExcludedMethods, true>;
     /**
      * Adds a `where` clause to the query.
      *
@@ -397,7 +468,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      * await db.select().from(cars).where(or(eq(cars.color, 'green'), eq(cars.color, 'blue')));
      * ```
      */
-    where(where: ((aliases: this['_']['selection']) => SQL | undefined) | SQL | undefined): SingleStoreSelectWithout<this, TDynamic, 'where'>;
+    where(where: ((aliases: this['_']['selection']) => SQL | undefined) | SQL | undefined): PgSelectWithout<this, TDynamic, 'where'>;
     /**
      * Adds a `having` clause to the query.
      *
@@ -420,7 +491,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *   .having(({ count }) => gt(count, 1));
      * ```
      */
-    having(having: ((aliases: this['_']['selection']) => SQL | undefined) | SQL | undefined): SingleStoreSelectWithout<this, TDynamic, 'having'>;
+    having(having: ((aliases: this['_']['selection']) => SQL | undefined) | SQL | undefined): PgSelectWithout<this, TDynamic, 'having'>;
     /**
      * Adds a `group by` clause to the query.
      *
@@ -440,8 +511,8 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      *   .groupBy(people.lastName);
      * ```
      */
-    groupBy(builder: (aliases: this['_']['selection']) => ValueOrArray<SingleStoreColumn | SQL | SQL.Aliased>): SingleStoreSelectWithout<this, TDynamic, 'groupBy'>;
-    groupBy(...columns: (SingleStoreColumn | SQL | SQL.Aliased)[]): SingleStoreSelectWithout<this, TDynamic, 'groupBy'>;
+    groupBy(builder: (aliases: this['_']['selection']) => ValueOrArray<PgColumn | SQL | SQL.Aliased>): PgSelectWithout<this, TDynamic, 'groupBy'>;
+    groupBy(...columns: (PgColumn | SQL | SQL.Aliased)[]): PgSelectWithout<this, TDynamic, 'groupBy'>;
     /**
      * Adds an `order by` clause to the query.
      *
@@ -466,8 +537,8 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      * await db.select().from(cars).orderBy(asc(cars.year), desc(cars.price));
      * ```
      */
-    orderBy(builder: (aliases: this['_']['selection']) => ValueOrArray<SingleStoreColumn | SQL | SQL.Aliased>): SingleStoreSelectWithout<this, TDynamic, 'orderBy'>;
-    orderBy(...columns: (SingleStoreColumn | SQL | SQL.Aliased)[]): SingleStoreSelectWithout<this, TDynamic, 'orderBy'>;
+    orderBy(builder: (aliases: this['_']['selection']) => ValueOrArray<PgColumn | SQL | SQL.Aliased>): PgSelectWithout<this, TDynamic, 'orderBy'>;
+    orderBy(...columns: (PgColumn | SQL | SQL.Aliased)[]): PgSelectWithout<this, TDynamic, 'orderBy'>;
     /**
      * Adds a `limit` clause to the query.
      *
@@ -484,7 +555,7 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      * await db.select().from(people).limit(10);
      * ```
      */
-    limit(limit: number): SingleStoreSelectWithout<this, TDynamic, 'limit'>;
+    limit(limit: number | Placeholder): PgSelectWithout<this, TDynamic, 'limit'>;
     /**
      * Adds an `offset` clause to the query.
      *
@@ -501,33 +572,41 @@ export declare abstract class SingleStoreSelectQueryBuilderBase<THKT extends Sin
      * await db.select().from(people).offset(10).limit(10);
      * ```
      */
-    offset(offset: number): SingleStoreSelectWithout<this, TDynamic, 'offset'>;
+    offset(offset: number | Placeholder): PgSelectWithout<this, TDynamic, 'offset'>;
     /**
      * Adds a `for` clause to the query.
      *
      * Calling this method will specify a lock strength for this query that controls how strictly it acquires exclusive access to the rows being queried.
      *
+     * See docs: {@link https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE}
+     *
      * @param strength the lock strength.
      * @param config the lock configuration.
      */
-    for(strength: LockStrength, config?: LockConfig): SingleStoreSelectWithout<this, TDynamic, 'for'>;
+    for(strength: LockStrength, config?: LockConfig): PgSelectWithout<this, TDynamic, 'for'>;
     toSQL(): Query;
     as<TAlias extends string>(alias: TAlias): SubqueryWithSelection<this['_']['selectedFields'], TAlias>;
-    $dynamic(): SingleStoreSelectDynamic<this>;
-}
-export interface SingleStoreSelectBase<TTableName extends string | undefined, TSelection extends ColumnsSelection, TSelectMode extends SelectMode, TPreparedQueryHKT extends PreparedQueryHKTBase, TNullabilityMap extends Record<string, JoinNullability> = TTableName extends string ? Record<TTableName, 'not-null'> : {}, TDynamic extends boolean = false, TExcludedMethods extends string = never, TResult extends any[] = SelectResult<TSelection, TSelectMode, TNullabilityMap>[], TSelectedFields extends ColumnsSelection = BuildSubquerySelection<TSelection, TNullabilityMap>> extends SingleStoreSelectQueryBuilderBase<SingleStoreSelectHKT, TTableName, TSelection, TSelectMode, TPreparedQueryHKT, TNullabilityMap, TDynamic, TExcludedMethods, TResult, TSelectedFields>, QueryPromise<TResult> {
-}
-export declare class SingleStoreSelectBase<TTableName extends string | undefined, TSelection, TSelectMode extends SelectMode, TPreparedQueryHKT extends PreparedQueryHKTBase, TNullabilityMap extends Record<string, JoinNullability> = TTableName extends string ? Record<TTableName, 'not-null'> : {}, TDynamic extends boolean = false, TExcludedMethods extends string = never, TResult = SelectResult<TSelection, TSelectMode, TNullabilityMap>[], TSelectedFields = BuildSubquerySelection<TSelection, TNullabilityMap>> extends SingleStoreSelectQueryBuilderBase<SingleStoreSelectHKT, TTableName, TSelection, TSelectMode, TPreparedQueryHKT, TNullabilityMap, TDynamic, TExcludedMethods, TResult, TSelectedFields> {
-    static readonly [entityKind]: string;
-    prepare(): SingleStoreSelectPrepare<this>;
+    $dynamic(): PgSelectDynamic<this>;
     $withCache(config?: {
         config?: CacheConfig;
         tag?: string;
         autoInvalidate?: boolean;
     } | false): this;
-    execute: ReturnType<this["prepare"]>["execute"];
-    private createIterator;
-    iterator: ReturnType<this["prepare"]>["iterator"];
+}
+export interface PgSelectBase<TTableName extends string | undefined, TSelection extends ColumnsSelection, TSelectMode extends SelectMode, TNullabilityMap extends Record<string, JoinNullability> = TTableName extends string ? Record<TTableName, 'not-null'> : {}, TDynamic extends boolean = false, TExcludedMethods extends string = never, TResult extends any[] = SelectResult<TSelection, TSelectMode, TNullabilityMap>[], TSelectedFields extends ColumnsSelection = BuildSubquerySelection<TSelection, TNullabilityMap>> extends PgSelectQueryBuilderBase<PgSelectHKT, TTableName, TSelection, TSelectMode, TNullabilityMap, TDynamic, TExcludedMethods, TResult, TSelectedFields>, QueryPromise<TResult>, SQLWrapper {
+}
+export declare class PgSelectBase<TTableName extends string | undefined, TSelection extends ColumnsSelection, TSelectMode extends SelectMode, TNullabilityMap extends Record<string, JoinNullability> = TTableName extends string ? Record<TTableName, 'not-null'> : {}, TDynamic extends boolean = false, TExcludedMethods extends string = never, TResult = SelectResult<TSelection, TSelectMode, TNullabilityMap>[], TSelectedFields = BuildSubquerySelection<TSelection, TNullabilityMap>> extends PgSelectQueryBuilderBase<PgSelectHKT, TTableName, TSelection, TSelectMode, TNullabilityMap, TDynamic, TExcludedMethods, TResult, TSelectedFields> implements RunnableQuery<TResult, 'pg'>, SQLWrapper {
+    static readonly [entityKind]: string;
+    /**
+     * Create a prepared statement for this query. This allows
+     * the database to remember this query for the given session
+     * and call it by name, rather than specifying the full query.
+     *
+     * {@link https://www.postgresql.org/docs/current/sql-prepare.html | Postgres prepare documentation}
+     */
+    prepare(name: string): PgSelectPrepare<this>;
+    private authToken?;
+    execute: ReturnType<this['prepare']>['execute'];
 }
 /**
  * Adds `union` set operator to the query.
@@ -540,7 +619,7 @@ export declare class SingleStoreSelectBase<TTableName extends string | undefined
  *
  * ```ts
  * // Select all unique names from customers and users tables
- * import { union } from 'drizzle-orm/singlestore-core'
+ * import { union } from 'drizzle-orm/pg-core'
  *
  * await union(
  *   db.select({ name: users.name }).from(users),
@@ -554,7 +633,7 @@ export declare class SingleStoreSelectBase<TTableName extends string | undefined
  *   );
  * ```
  */
-export declare const union: SingleStoreCreateSetOperatorFn;
+export declare const union: PgCreateSetOperatorFn;
 /**
  * Adds `union all` set operator to the query.
  *
@@ -566,7 +645,7 @@ export declare const union: SingleStoreCreateSetOperatorFn;
  *
  * ```ts
  * // Select all transaction ids from both online and in-store sales
- * import { unionAll } from 'drizzle-orm/singlestore-core'
+ * import { unionAll } from 'drizzle-orm/pg-core'
  *
  * await unionAll(
  *   db.select({ transaction: onlineSales.transactionId }).from(onlineSales),
@@ -580,7 +659,7 @@ export declare const union: SingleStoreCreateSetOperatorFn;
  *   );
  * ```
  */
-export declare const unionAll: SingleStoreCreateSetOperatorFn;
+export declare const unionAll: PgCreateSetOperatorFn;
 /**
  * Adds `intersect` set operator to the query.
  *
@@ -592,7 +671,7 @@ export declare const unionAll: SingleStoreCreateSetOperatorFn;
  *
  * ```ts
  * // Select course names that are offered in both departments A and B
- * import { intersect } from 'drizzle-orm/singlestore-core'
+ * import { intersect } from 'drizzle-orm/pg-core'
  *
  * await intersect(
  *   db.select({ courseName: depA.courseName }).from(depA),
@@ -606,7 +685,48 @@ export declare const unionAll: SingleStoreCreateSetOperatorFn;
  *   );
  * ```
  */
-export declare const intersect: SingleStoreCreateSetOperatorFn;
+export declare const intersect: PgCreateSetOperatorFn;
+/**
+ * Adds `intersect all` set operator to the query.
+ *
+ * Calling this method will retain only the rows that are present in both result sets including all duplicates.
+ *
+ * See docs: {@link https://orm.drizzle.team/docs/set-operations#intersect-all}
+ *
+ * @example
+ *
+ * ```ts
+ * // Select all products and quantities that are ordered by both regular and VIP customers
+ * import { intersectAll } from 'drizzle-orm/pg-core'
+ *
+ * await intersectAll(
+ *   db.select({
+ *     productId: regularCustomerOrders.productId,
+ *     quantityOrdered: regularCustomerOrders.quantityOrdered
+ *   })
+ *   .from(regularCustomerOrders),
+ *   db.select({
+ *     productId: vipCustomerOrders.productId,
+ *     quantityOrdered: vipCustomerOrders.quantityOrdered
+ *   })
+ *   .from(vipCustomerOrders)
+ * );
+ * // or
+ * await db.select({
+ *   productId: regularCustomerOrders.productId,
+ *   quantityOrdered: regularCustomerOrders.quantityOrdered
+ * })
+ * .from(regularCustomerOrders)
+ * .intersectAll(
+ *   db.select({
+ *     productId: vipCustomerOrders.productId,
+ *     quantityOrdered: vipCustomerOrders.quantityOrdered
+ *   })
+ *   .from(vipCustomerOrders)
+ * );
+ * ```
+ */
+export declare const intersectAll: PgCreateSetOperatorFn;
 /**
  * Adds `except` set operator to the query.
  *
@@ -618,7 +738,7 @@ export declare const intersect: SingleStoreCreateSetOperatorFn;
  *
  * ```ts
  * // Select all courses offered in department A but not in department B
- * import { except } from 'drizzle-orm/singlestore-core'
+ * import { except } from 'drizzle-orm/pg-core'
  *
  * await except(
  *   db.select({ courseName: depA.courseName }).from(depA),
@@ -632,28 +752,45 @@ export declare const intersect: SingleStoreCreateSetOperatorFn;
  *   );
  * ```
  */
-export declare const except: SingleStoreCreateSetOperatorFn;
+export declare const except: PgCreateSetOperatorFn;
 /**
- * Adds `minus` set operator to the query.
+ * Adds `except all` set operator to the query.
  *
- * This is an alias of `except` supported by SingleStore.
+ * Calling this method will retrieve all rows from the left query, except for the rows that are present in the result set of the right query.
+ *
+ * See docs: {@link https://orm.drizzle.team/docs/set-operations#except-all}
  *
  * @example
  *
  * ```ts
- * // Select all courses offered in department A but not in department B
- * import { minus } from 'drizzle-orm/singlestore-core'
+ * // Select all products that are ordered by regular customers but not by VIP customers
+ * import { exceptAll } from 'drizzle-orm/pg-core'
  *
- * await minus(
- *   db.select({ courseName: depA.courseName }).from(depA),
- *   db.select({ courseName: depB.courseName }).from(depB)
+ * await exceptAll(
+ *   db.select({
+ *     productId: regularCustomerOrders.productId,
+ *     quantityOrdered: regularCustomerOrders.quantityOrdered
+ *   })
+ *   .from(regularCustomerOrders),
+ *   db.select({
+ *     productId: vipCustomerOrders.productId,
+ *     quantityOrdered: vipCustomerOrders.quantityOrdered
+ *   })
+ *   .from(vipCustomerOrders)
  * );
  * // or
- * await db.select({ courseName: depA.courseName })
- *   .from(depA)
- *   .minus(
- *     db.select({ courseName: depB.courseName }).from(depB)
- *   );
+ * await db.select({
+ *   productId: regularCustomerOrders.productId,
+ *   quantityOrdered: regularCustomerOrders.quantityOrdered,
+ * })
+ * .from(regularCustomerOrders)
+ * .exceptAll(
+ *   db.select({
+ *     productId: vipCustomerOrders.productId,
+ *     quantityOrdered: vipCustomerOrders.quantityOrdered,
+ *   })
+ *   .from(vipCustomerOrders)
+ * );
  * ```
  */
-export declare const minus: SingleStoreCreateSetOperatorFn;
+export declare const exceptAll: PgCreateSetOperatorFn;

@@ -18,19 +18,101 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var query_builder_exports = {};
 __export(query_builder_exports, {
-  TypedQueryBuilder: () => TypedQueryBuilder
+  QueryBuilder: () => QueryBuilder
 });
 module.exports = __toCommonJS(query_builder_exports);
-var import_entity = require("../entity.cjs");
-class TypedQueryBuilder {
-  static [import_entity.entityKind] = "TypedQueryBuilder";
-  /** @internal */
-  getSelectedFields() {
-    return this._.selectedFields;
+var import_entity = require("../../entity.cjs");
+var import_dialect = require("../dialect.cjs");
+var import_selection_proxy = require("../../selection-proxy.cjs");
+var import_subquery = require("../../subquery.cjs");
+var import_select = require("./select.cjs");
+class QueryBuilder {
+  static [import_entity.entityKind] = "PgQueryBuilder";
+  dialect;
+  dialectConfig;
+  constructor(dialect) {
+    this.dialect = (0, import_entity.is)(dialect, import_dialect.PgDialect) ? dialect : void 0;
+    this.dialectConfig = (0, import_entity.is)(dialect, import_dialect.PgDialect) ? void 0 : dialect;
+  }
+  $with = (alias, selection) => {
+    const queryBuilder = this;
+    const as = (qb) => {
+      if (typeof qb === "function") {
+        qb = qb(queryBuilder);
+      }
+      return new Proxy(
+        new import_subquery.WithSubquery(
+          qb.getSQL(),
+          selection ?? ("getSelectedFields" in qb ? qb.getSelectedFields() ?? {} : {}),
+          alias,
+          true
+        ),
+        new import_selection_proxy.SelectionProxyHandler({ alias, sqlAliasedBehavior: "alias", sqlBehavior: "error" })
+      );
+    };
+    return { as };
+  };
+  with(...queries) {
+    const self = this;
+    function select(fields) {
+      return new import_select.PgSelectBuilder({
+        fields: fields ?? void 0,
+        session: void 0,
+        dialect: self.getDialect(),
+        withList: queries
+      });
+    }
+    function selectDistinct(fields) {
+      return new import_select.PgSelectBuilder({
+        fields: fields ?? void 0,
+        session: void 0,
+        dialect: self.getDialect(),
+        distinct: true
+      });
+    }
+    function selectDistinctOn(on, fields) {
+      return new import_select.PgSelectBuilder({
+        fields: fields ?? void 0,
+        session: void 0,
+        dialect: self.getDialect(),
+        distinct: { on }
+      });
+    }
+    return { select, selectDistinct, selectDistinctOn };
+  }
+  select(fields) {
+    return new import_select.PgSelectBuilder({
+      fields: fields ?? void 0,
+      session: void 0,
+      dialect: this.getDialect()
+    });
+  }
+  selectDistinct(fields) {
+    return new import_select.PgSelectBuilder({
+      fields: fields ?? void 0,
+      session: void 0,
+      dialect: this.getDialect(),
+      distinct: true
+    });
+  }
+  selectDistinctOn(on, fields) {
+    return new import_select.PgSelectBuilder({
+      fields: fields ?? void 0,
+      session: void 0,
+      dialect: this.getDialect(),
+      distinct: { on }
+    });
+  }
+  // Lazy load dialect to avoid circular dependency
+  getDialect() {
+    if (!this.dialect) {
+      this.dialect = new import_dialect.PgDialect(this.dialectConfig);
+    }
+    return this.dialect;
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  TypedQueryBuilder
+  QueryBuilder
 });
 //# sourceMappingURL=query-builder.cjs.map

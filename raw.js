@@ -1,19 +1,20 @@
 import { entityKind } from "../../entity.js";
 import { QueryPromise } from "../../query-promise.js";
-class SQLiteRaw extends QueryPromise {
-  constructor(execute, getSQL, action, dialect, mapBatchResult) {
+class PgRaw extends QueryPromise {
+  constructor(execute, sql, query, mapBatchResult) {
     super();
     this.execute = execute;
-    this.getSQL = getSQL;
-    this.dialect = dialect;
+    this.sql = sql;
+    this.query = query;
     this.mapBatchResult = mapBatchResult;
-    this.config = { action };
   }
-  static [entityKind] = "SQLiteRaw";
+  static [entityKind] = "PgRaw";
   /** @internal */
-  config;
+  getSQL() {
+    return this.sql;
+  }
   getQuery() {
-    return { ...this.dialect.sqlToQuery(this.getSQL()), method: this.config.action };
+    return this.query;
   }
   mapResult(result, isFromBatch) {
     return isFromBatch ? this.mapBatchResult(result) : result;
@@ -27,6 +28,6 @@ class SQLiteRaw extends QueryPromise {
   }
 }
 export {
-  SQLiteRaw
+  PgRaw
 };
 //# sourceMappingURL=raw.js.map

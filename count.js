@@ -1,28 +1,34 @@
 import { entityKind } from "../../entity.js";
 import { SQL, sql } from "../../sql/sql.js";
-class SingleStoreCountBuilder extends SQL {
+class PgCountBuilder extends SQL {
   constructor(params) {
-    super(SingleStoreCountBuilder.buildEmbeddedCount(params.source, params.filters).queryChunks);
+    super(PgCountBuilder.buildEmbeddedCount(params.source, params.filters).queryChunks);
     this.params = params;
     this.mapWith(Number);
     this.session = params.session;
-    this.sql = SingleStoreCountBuilder.buildCount(
+    this.sql = PgCountBuilder.buildCount(
       params.source,
       params.filters
     );
   }
   sql;
-  static [entityKind] = "SingleStoreCountBuilder";
-  [Symbol.toStringTag] = "SingleStoreCountBuilder";
+  token;
+  static [entityKind] = "PgCountBuilder";
+  [Symbol.toStringTag] = "PgCountBuilder";
   session;
   static buildEmbeddedCount(source, filters) {
     return sql`(select count(*) from ${source}${sql.raw(" where ").if(filters)}${filters})`;
   }
   static buildCount(source, filters) {
-    return sql`select count(*) as count from ${source}${sql.raw(" where ").if(filters)}${filters}`;
+    return sql`select count(*) as count from ${source}${sql.raw(" where ").if(filters)}${filters};`;
+  }
+  /** @intrnal */
+  setToken(token) {
+    this.token = token;
+    return this;
   }
   then(onfulfilled, onrejected) {
-    return Promise.resolve(this.session.count(this.sql)).then(
+    return Promise.resolve(this.session.count(this.sql, this.token)).then(
       onfulfilled,
       onrejected
     );
@@ -44,6 +50,6 @@ class SingleStoreCountBuilder extends SQL {
   }
 }
 export {
-  SingleStoreCountBuilder
+  PgCountBuilder
 };
 //# sourceMappingURL=count.js.map

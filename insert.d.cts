@@ -1,106 +1,177 @@
+import type { WithCacheConfig } from "../../cache/core/types.cjs";
 import { entityKind } from "../../entity.cjs";
+import type { PgDialect } from "../dialect.cjs";
+import type { IndexColumn } from "../indexes.cjs";
+import type { PgPreparedQuery, PgQueryResultHKT, PgQueryResultKind, PgSession, PreparedQueryConfig } from "../session.cjs";
+import type { PgTable, TableConfig } from "../table.cjs";
+import type { TypedQueryBuilder } from "../../query-builders/query-builder.cjs";
+import type { SelectResultFields } from "../../query-builders/select.types.cjs";
 import { QueryPromise } from "../../query-promise.cjs";
 import type { RunnableQuery } from "../../runnable-query.cjs";
-import type { SingleStoreDialect } from "../dialect.cjs";
-import type { AnySingleStoreQueryResultHKT, PreparedQueryHKTBase, PreparedQueryKind, SingleStorePreparedQueryConfig, SingleStoreQueryResultHKT, SingleStoreQueryResultKind, SingleStoreSession } from "../session.cjs";
-import type { SingleStoreTable } from "../table.cjs";
-import type { Placeholder, Query, SQLWrapper } from "../../sql/sql.cjs";
+import type { ColumnsSelection, Placeholder, Query, SQLWrapper } from "../../sql/sql.cjs";
 import { Param, SQL } from "../../sql/sql.cjs";
-import type { InferModelFromColumns } from "../../table.cjs";
-import type { AnySingleStoreColumn } from "../columns/common.cjs";
-import type { SelectedFieldsOrdered } from "./select.types.cjs";
-import type { SingleStoreUpdateSetSource } from "./update.cjs";
-export interface SingleStoreInsertConfig<TTable extends SingleStoreTable = SingleStoreTable> {
+import type { Subquery } from "../../subquery.cjs";
+import type { InferInsertModel } from "../../table.cjs";
+import type { AnyPgColumn } from "../columns/common.cjs";
+import { QueryBuilder } from "./query-builder.cjs";
+import type { SelectedFieldsFlat, SelectedFieldsOrdered } from "./select.types.cjs";
+import type { PgUpdateSetSource } from "./update.cjs";
+export interface PgInsertConfig<TTable extends PgTable = PgTable> {
     table: TTable;
-    values: Record<string, Param | SQL>[];
-    ignore: boolean;
+    values: Record<string, Param | SQL>[] | PgInsertSelectQueryBuilder<TTable> | SQL;
+    withList?: Subquery[];
     onConflict?: SQL;
+    returningFields?: SelectedFieldsFlat;
     returning?: SelectedFieldsOrdered;
+    select?: boolean;
+    overridingSystemValue_?: boolean;
 }
-export type AnySingleStoreInsertConfig = SingleStoreInsertConfig<SingleStoreTable>;
-export type SingleStoreInsertValue<TTable extends SingleStoreTable> = {
-    [Key in keyof TTable['$inferInsert']]: TTable['$inferInsert'][Key] | SQL | Placeholder;
+export type PgInsertValue<TTable extends PgTable<TableConfig>, OverrideT extends boolean = false> = {
+    [Key in keyof InferInsertModel<TTable, {
+        dbColumnNames: false;
+        override: OverrideT;
+    }>]: InferInsertModel<TTable, {
+        dbColumnNames: false;
+        override: OverrideT;
+    }>[Key] | SQL | Placeholder;
 } & {};
-export declare class SingleStoreInsertBuilder<TTable extends SingleStoreTable, TQueryResult extends SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase> {
+export type PgInsertSelectQueryBuilder<TTable extends PgTable> = TypedQueryBuilder<{
+    [K in keyof TTable['$inferInsert']]: AnyPgColumn | SQL | SQL.Aliased | TTable['$inferInsert'][K];
+}>;
+export declare class PgInsertBuilder<TTable extends PgTable, TQueryResult extends PgQueryResultHKT, OverrideT extends boolean = false> {
     private table;
     private session;
     private dialect;
+    private withList?;
+    private overridingSystemValue_?;
     static readonly [entityKind]: string;
-    private shouldIgnore;
-    constructor(table: TTable, session: SingleStoreSession, dialect: SingleStoreDialect);
-    ignore(): this;
-    values(value: SingleStoreInsertValue<TTable>): SingleStoreInsertBase<TTable, TQueryResult, TPreparedQueryHKT>;
-    values(values: SingleStoreInsertValue<TTable>[]): SingleStoreInsertBase<TTable, TQueryResult, TPreparedQueryHKT>;
+    constructor(table: TTable, session: PgSession, dialect: PgDialect, withList?: Subquery[] | undefined, overridingSystemValue_?: boolean | undefined);
+    private authToken?;
+    overridingSystemValue(): Omit<PgInsertBuilder<TTable, TQueryResult, true>, 'overridingSystemValue'>;
+    values(value: PgInsertValue<TTable, OverrideT>): PgInsertBase<TTable, TQueryResult>;
+    values(values: PgInsertValue<TTable, OverrideT>[]): PgInsertBase<TTable, TQueryResult>;
+    select(selectQuery: (qb: QueryBuilder) => PgInsertSelectQueryBuilder<TTable>): PgInsertBase<TTable, TQueryResult>;
+    select(selectQuery: (qb: QueryBuilder) => SQL): PgInsertBase<TTable, TQueryResult>;
+    select(selectQuery: SQL): PgInsertBase<TTable, TQueryResult>;
+    select(selectQuery: PgInsertSelectQueryBuilder<TTable>): PgInsertBase<TTable, TQueryResult>;
 }
-export type SingleStoreInsertWithout<T extends AnySingleStoreInsert, TDynamic extends boolean, K extends keyof T & string> = TDynamic extends true ? T : Omit<SingleStoreInsertBase<T['_']['table'], T['_']['queryResult'], T['_']['preparedQueryHKT'], T['_']['returning'], TDynamic, T['_']['excludedMethods'] | '$returning'>, T['_']['excludedMethods'] | K>;
-export type SingleStoreInsertDynamic<T extends AnySingleStoreInsert> = SingleStoreInsert<T['_']['table'], T['_']['queryResult'], T['_']['preparedQueryHKT'], T['_']['returning']>;
-export type SingleStoreInsertPrepare<T extends AnySingleStoreInsert, TReturning extends Record<string, unknown> | undefined = undefined> = PreparedQueryKind<T['_']['preparedQueryHKT'], SingleStorePreparedQueryConfig & {
-    execute: TReturning extends undefined ? SingleStoreQueryResultKind<T['_']['queryResult'], never> : TReturning[];
-    iterator: never;
-}, true>;
-export type SingleStoreInsertOnDuplicateKeyUpdateConfig<T extends AnySingleStoreInsert> = {
-    set: SingleStoreUpdateSetSource<T['_']['table']>;
-};
-export type SingleStoreInsert<TTable extends SingleStoreTable = SingleStoreTable, TQueryResult extends SingleStoreQueryResultHKT = AnySingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase = PreparedQueryHKTBase, TReturning extends Record<string, unknown> | undefined = Record<string, unknown> | undefined> = SingleStoreInsertBase<TTable, TQueryResult, TPreparedQueryHKT, TReturning, true, never>;
-export type SingleStoreInsertReturning<T extends AnySingleStoreInsert, TDynamic extends boolean> = SingleStoreInsertBase<T['_']['table'], T['_']['queryResult'], T['_']['preparedQueryHKT'], InferModelFromColumns<GetPrimarySerialOrDefaultKeys<T['_']['table']['_']['columns']>>, TDynamic, T['_']['excludedMethods'] | '$returning'>;
-export type AnySingleStoreInsert = SingleStoreInsertBase<any, any, any, any, any, any>;
-export interface SingleStoreInsertBase<TTable extends SingleStoreTable, TQueryResult extends SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase, TReturning extends Record<string, unknown> | undefined = undefined, TDynamic extends boolean = false, TExcludedMethods extends string = never> extends QueryPromise<TReturning extends undefined ? SingleStoreQueryResultKind<TQueryResult, never> : TReturning[]>, RunnableQuery<TReturning extends undefined ? SingleStoreQueryResultKind<TQueryResult, never> : TReturning[], 'singlestore'>, SQLWrapper {
+export type PgInsertWithout<T extends AnyPgInsert, TDynamic extends boolean, K extends keyof T & string> = TDynamic extends true ? T : Omit<PgInsertBase<T['_']['table'], T['_']['queryResult'], T['_']['selectedFields'], T['_']['returning'], TDynamic, T['_']['excludedMethods'] | K>, T['_']['excludedMethods'] | K>;
+export type PgInsertReturning<T extends AnyPgInsert, TDynamic extends boolean, TSelectedFields extends SelectedFieldsFlat> = PgInsertBase<T['_']['table'], T['_']['queryResult'], TSelectedFields, SelectResultFields<TSelectedFields>, TDynamic, T['_']['excludedMethods']>;
+export type PgInsertReturningAll<T extends AnyPgInsert, TDynamic extends boolean> = PgInsertBase<T['_']['table'], T['_']['queryResult'], T['_']['table']['_']['columns'], T['_']['table']['$inferSelect'], TDynamic, T['_']['excludedMethods']>;
+export interface PgInsertOnConflictDoUpdateConfig<T extends AnyPgInsert> {
+    target: IndexColumn | IndexColumn[];
+    /** @deprecated use either `targetWhere` or `setWhere` */
+    where?: SQL;
+    targetWhere?: SQL;
+    setWhere?: SQL;
+    set: PgUpdateSetSource<T['_']['table']>;
+}
+export type PgInsertPrepare<T extends AnyPgInsert> = PgPreparedQuery<PreparedQueryConfig & {
+    execute: T['_']['returning'] extends undefined ? PgQueryResultKind<T['_']['queryResult'], never> : T['_']['returning'][];
+}>;
+export type PgInsertDynamic<T extends AnyPgInsert> = PgInsert<T['_']['table'], T['_']['queryResult'], T['_']['returning']>;
+export type AnyPgInsert = PgInsertBase<any, any, any, any, any, any>;
+export type PgInsert<TTable extends PgTable = PgTable, TQueryResult extends PgQueryResultHKT = PgQueryResultHKT, TSelectedFields extends ColumnsSelection | undefined = ColumnsSelection | undefined, TReturning extends Record<string, unknown> | undefined = Record<string, unknown> | undefined> = PgInsertBase<TTable, TQueryResult, TSelectedFields, TReturning, true, never>;
+export interface PgInsertBase<TTable extends PgTable, TQueryResult extends PgQueryResultHKT, TSelectedFields extends ColumnsSelection | undefined = undefined, TReturning extends Record<string, unknown> | undefined = undefined, TDynamic extends boolean = false, TExcludedMethods extends string = never> extends TypedQueryBuilder<TSelectedFields, TReturning extends undefined ? PgQueryResultKind<TQueryResult, never> : TReturning[]>, QueryPromise<TReturning extends undefined ? PgQueryResultKind<TQueryResult, never> : TReturning[]>, RunnableQuery<TReturning extends undefined ? PgQueryResultKind<TQueryResult, never> : TReturning[], 'pg'>, SQLWrapper {
     readonly _: {
-        readonly dialect: 'singlestore';
+        readonly dialect: 'pg';
         readonly table: TTable;
         readonly queryResult: TQueryResult;
-        readonly preparedQueryHKT: TPreparedQueryHKT;
+        readonly selectedFields: TSelectedFields;
+        readonly returning: TReturning;
         readonly dynamic: TDynamic;
         readonly excludedMethods: TExcludedMethods;
-        readonly returning: TReturning;
-        readonly result: TReturning extends undefined ? SingleStoreQueryResultKind<TQueryResult, never> : TReturning[];
+        readonly result: TReturning extends undefined ? PgQueryResultKind<TQueryResult, never> : TReturning[];
     };
 }
-export type PrimaryKeyKeys<T extends Record<string, AnySingleStoreColumn>> = {
-    [K in keyof T]: T[K]['_']['isPrimaryKey'] extends true ? T[K]['_']['isAutoincrement'] extends true ? K : T[K]['_']['hasRuntimeDefault'] extends true ? T[K]['_']['isPrimaryKey'] extends true ? K : never : never : T[K]['_']['hasRuntimeDefault'] extends true ? T[K]['_']['isPrimaryKey'] extends true ? K : never : never;
-}[keyof T];
-export type GetPrimarySerialOrDefaultKeys<T extends Record<string, AnySingleStoreColumn>> = {
-    [K in PrimaryKeyKeys<T>]: T[K];
-};
-export declare class SingleStoreInsertBase<TTable extends SingleStoreTable, TQueryResult extends SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase, TReturning extends Record<string, unknown> | undefined = undefined, TDynamic extends boolean = false, TExcludedMethods extends string = never> extends QueryPromise<TReturning extends undefined ? SingleStoreQueryResultKind<TQueryResult, never> : TReturning[]> implements RunnableQuery<TReturning extends undefined ? SingleStoreQueryResultKind<TQueryResult, never> : TReturning[], 'singlestore'>, SQLWrapper {
+export declare class PgInsertBase<TTable extends PgTable, TQueryResult extends PgQueryResultHKT, TSelectedFields extends ColumnsSelection | undefined = undefined, TReturning extends Record<string, unknown> | undefined = undefined, TDynamic extends boolean = false, TExcludedMethods extends string = never> extends QueryPromise<TReturning extends undefined ? PgQueryResultKind<TQueryResult, never> : TReturning[]> implements TypedQueryBuilder<TSelectedFields, TReturning extends undefined ? PgQueryResultKind<TQueryResult, never> : TReturning[]>, RunnableQuery<TReturning extends undefined ? PgQueryResultKind<TQueryResult, never> : TReturning[], 'pg'>, SQLWrapper {
     private session;
     private dialect;
     static readonly [entityKind]: string;
-    protected $table: TTable;
     private config;
-    constructor(table: TTable, values: SingleStoreInsertConfig['values'], ignore: boolean, session: SingleStoreSession, dialect: SingleStoreDialect);
+    protected cacheConfig?: WithCacheConfig;
+    constructor(table: TTable, values: PgInsertConfig['values'], session: PgSession, dialect: PgDialect, withList?: Subquery[], select?: boolean, overridingSystemValue_?: boolean);
     /**
-     * Adds an `on duplicate key update` clause to the query.
+     * Adds a `returning` clause to the query.
      *
-     * Calling this method will update update the row if any unique index conflicts. MySQL will automatically determine the conflict target based on the primary key and unique indexes.
+     * Calling this method will return the specified fields of the inserted rows. If no fields are specified, all fields will be returned.
      *
-     * See docs: {@link https://orm.drizzle.team/docs/insert#on-duplicate-key-update}
-     *
-     * @param config The `set` clause
+     * See docs: {@link https://orm.drizzle.team/docs/insert#insert-returning}
      *
      * @example
      * ```ts
-     * await db.insert(cars)
-     *   .values({ id: 1, brand: 'BMW'})
-     *   .onDuplicateKeyUpdate({ set: { brand: 'Porsche' }});
-     * ```
+     * // Insert one row and return all fields
+     * const insertedCar: Car[] = await db.insert(cars)
+     *   .values({ brand: 'BMW' })
+     *   .returning();
      *
-     * While MySQL does not directly support doing nothing on conflict, you can perform a no-op by setting any column's value to itself and achieve the same effect:
-     *
-     * ```ts
-     * import { sql } from 'drizzle-orm';
-     *
-     * await db.insert(cars)
-     *   .values({ id: 1, brand: 'BMW' })
-     *   .onDuplicateKeyUpdate({ set: { id: sql`id` } });
+     * // Insert one row and return only the id
+     * const insertedCarId: { id: number }[] = await db.insert(cars)
+     *   .values({ brand: 'BMW' })
+     *   .returning({ id: cars.id });
      * ```
      */
-    onDuplicateKeyUpdate(config: SingleStoreInsertOnDuplicateKeyUpdateConfig<this>): SingleStoreInsertWithout<this, TDynamic, 'onDuplicateKeyUpdate'>;
-    $returningId(): SingleStoreInsertWithout<SingleStoreInsertReturning<this, TDynamic>, TDynamic, '$returningId'>;
+    returning(): PgInsertWithout<PgInsertReturningAll<this, TDynamic>, TDynamic, 'returning'>;
+    returning<TSelectedFields extends SelectedFieldsFlat>(fields: TSelectedFields): PgInsertWithout<PgInsertReturning<this, TDynamic, TSelectedFields>, TDynamic, 'returning'>;
+    /**
+     * Adds an `on conflict do nothing` clause to the query.
+     *
+     * Calling this method simply avoids inserting a row as its alternative action.
+     *
+     * See docs: {@link https://orm.drizzle.team/docs/insert#on-conflict-do-nothing}
+     *
+     * @param config The `target` and `where` clauses.
+     *
+     * @example
+     * ```ts
+     * // Insert one row and cancel the insert if there's a conflict
+     * await db.insert(cars)
+     *   .values({ id: 1, brand: 'BMW' })
+     *   .onConflictDoNothing();
+     *
+     * // Explicitly specify conflict target
+     * await db.insert(cars)
+     *   .values({ id: 1, brand: 'BMW' })
+     *   .onConflictDoNothing({ target: cars.id });
+     * ```
+     */
+    onConflictDoNothing(config?: {
+        target?: IndexColumn | IndexColumn[];
+        where?: SQL;
+    }): PgInsertWithout<this, TDynamic, 'onConflictDoNothing' | 'onConflictDoUpdate'>;
+    /**
+     * Adds an `on conflict do update` clause to the query.
+     *
+     * Calling this method will update the existing row that conflicts with the row proposed for insertion as its alternative action.
+     *
+     * See docs: {@link https://orm.drizzle.team/docs/insert#upserts-and-conflicts}
+     *
+     * @param config The `target`, `set` and `where` clauses.
+     *
+     * @example
+     * ```ts
+     * // Update the row if there's a conflict
+     * await db.insert(cars)
+     *   .values({ id: 1, brand: 'BMW' })
+     *   .onConflictDoUpdate({
+     *     target: cars.id,
+     *     set: { brand: 'Porsche' }
+     *   });
+     *
+     * // Upsert with 'where' clause
+     * await db.insert(cars)
+     *   .values({ id: 1, brand: 'BMW' })
+     *   .onConflictDoUpdate({
+     *     target: cars.id,
+     *     set: { brand: 'newBMW' },
+     *     targetWhere: sql`${cars.createdAt} > '2023-01-01'::date`,
+     *   });
+     * ```
+     */
+    onConflictDoUpdate(config: PgInsertOnConflictDoUpdateConfig<this>): PgInsertWithout<this, TDynamic, 'onConflictDoNothing' | 'onConflictDoUpdate'>;
     toSQL(): Query;
-    prepare(): SingleStoreInsertPrepare<this, TReturning>;
+    prepare(name: string): PgInsertPrepare<this>;
+    private authToken?;
     execute: ReturnType<this['prepare']>['execute'];
-    private createIterator;
-    iterator: ReturnType<this["prepare"]>["iterator"];
-    $dynamic(): SingleStoreInsertDynamic<this>;
+    $dynamic(): PgInsertDynamic<this>;
 }
