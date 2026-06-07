@@ -16,33 +16,37 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var bigint_exports = {};
-__export(bigint_exports, {
-  PgBigInt53: () => PgBigInt53,
-  PgBigInt53Builder: () => PgBigInt53Builder,
-  PgBigInt64: () => PgBigInt64,
-  PgBigInt64Builder: () => PgBigInt64Builder,
-  bigint: () => bigint
+var bigserial_exports = {};
+__export(bigserial_exports, {
+  PgBigSerial53: () => PgBigSerial53,
+  PgBigSerial53Builder: () => PgBigSerial53Builder,
+  PgBigSerial64: () => PgBigSerial64,
+  PgBigSerial64Builder: () => PgBigSerial64Builder,
+  bigserial: () => bigserial
 });
-module.exports = __toCommonJS(bigint_exports);
+module.exports = __toCommonJS(bigserial_exports);
 var import_entity = require("../../entity.cjs");
 var import_utils = require("../../utils.cjs");
 var import_common = require("./common.cjs");
-var import_int_common = require("./int.common.cjs");
-class PgBigInt53Builder extends import_int_common.PgIntColumnBaseBuilder {
-  static [import_entity.entityKind] = "PgBigInt53Builder";
+class PgBigSerial53Builder extends import_common.PgColumnBuilder {
+  static [import_entity.entityKind] = "PgBigSerial53Builder";
   constructor(name) {
-    super(name, "number", "PgBigInt53");
+    super(name, "number", "PgBigSerial53");
+    this.config.hasDefault = true;
+    this.config.notNull = true;
   }
   /** @internal */
   build(table) {
-    return new PgBigInt53(table, this.config);
+    return new PgBigSerial53(
+      table,
+      this.config
+    );
   }
 }
-class PgBigInt53 extends import_common.PgColumn {
-  static [import_entity.entityKind] = "PgBigInt53";
+class PgBigSerial53 extends import_common.PgColumn {
+  static [import_entity.entityKind] = "PgBigSerial53";
   getSQLType() {
-    return "bigint";
+    return "bigserial";
   }
   mapFromDriverValue(value) {
     if (typeof value === "number") {
@@ -51,42 +55,43 @@ class PgBigInt53 extends import_common.PgColumn {
     return Number(value);
   }
 }
-class PgBigInt64Builder extends import_int_common.PgIntColumnBaseBuilder {
-  static [import_entity.entityKind] = "PgBigInt64Builder";
+class PgBigSerial64Builder extends import_common.PgColumnBuilder {
+  static [import_entity.entityKind] = "PgBigSerial64Builder";
   constructor(name) {
-    super(name, "bigint", "PgBigInt64");
+    super(name, "bigint", "PgBigSerial64");
+    this.config.hasDefault = true;
   }
   /** @internal */
   build(table) {
-    return new PgBigInt64(
+    return new PgBigSerial64(
       table,
       this.config
     );
   }
 }
-class PgBigInt64 extends import_common.PgColumn {
-  static [import_entity.entityKind] = "PgBigInt64";
+class PgBigSerial64 extends import_common.PgColumn {
+  static [import_entity.entityKind] = "PgBigSerial64";
   getSQLType() {
-    return "bigint";
+    return "bigserial";
   }
   // eslint-disable-next-line unicorn/prefer-native-coercion-functions
   mapFromDriverValue(value) {
     return BigInt(value);
   }
 }
-function bigint(a, b) {
+function bigserial(a, b) {
   const { name, config } = (0, import_utils.getColumnNameAndConfig)(a, b);
   if (config.mode === "number") {
-    return new PgBigInt53Builder(name);
+    return new PgBigSerial53Builder(name);
   }
-  return new PgBigInt64Builder(name);
+  return new PgBigSerial64Builder(name);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  PgBigInt53,
-  PgBigInt53Builder,
-  PgBigInt64,
-  PgBigInt64Builder,
-  bigint
+  PgBigSerial53,
+  PgBigSerial53Builder,
+  PgBigSerial64,
+  PgBigSerial64Builder,
+  bigserial
 });
-//# sourceMappingURL=bigint.cjs.map
+//# sourceMappingURL=bigserial.cjs.map

@@ -18,31 +18,31 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var custom_exports = {};
 __export(custom_exports, {
-  SingleStoreCustomColumn: () => SingleStoreCustomColumn,
-  SingleStoreCustomColumnBuilder: () => SingleStoreCustomColumnBuilder,
+  PgCustomColumn: () => PgCustomColumn,
+  PgCustomColumnBuilder: () => PgCustomColumnBuilder,
   customType: () => customType
 });
 module.exports = __toCommonJS(custom_exports);
 var import_entity = require("../../entity.cjs");
 var import_utils = require("../../utils.cjs");
 var import_common = require("./common.cjs");
-class SingleStoreCustomColumnBuilder extends import_common.SingleStoreColumnBuilder {
-  static [import_entity.entityKind] = "SingleStoreCustomColumnBuilder";
+class PgCustomColumnBuilder extends import_common.PgColumnBuilder {
+  static [import_entity.entityKind] = "PgCustomColumnBuilder";
   constructor(name, fieldConfig, customTypeParams) {
-    super(name, "custom", "SingleStoreCustomColumn");
+    super(name, "custom", "PgCustomColumn");
     this.config.fieldConfig = fieldConfig;
     this.config.customTypeParams = customTypeParams;
   }
   /** @internal */
   build(table) {
-    return new SingleStoreCustomColumn(
+    return new PgCustomColumn(
       table,
       this.config
     );
   }
 }
-class SingleStoreCustomColumn extends import_common.SingleStoreColumn {
-  static [import_entity.entityKind] = "SingleStoreCustomColumn";
+class PgCustomColumn extends import_common.PgColumn {
+  static [import_entity.entityKind] = "PgCustomColumn";
   sqlName;
   mapTo;
   mapFrom;
@@ -65,13 +65,13 @@ class SingleStoreCustomColumn extends import_common.SingleStoreColumn {
 function customType(customTypeParams) {
   return (a, b) => {
     const { name, config } = (0, import_utils.getColumnNameAndConfig)(a, b);
-    return new SingleStoreCustomColumnBuilder(name, config, customTypeParams);
+    return new PgCustomColumnBuilder(name, config, customTypeParams);
   };
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreCustomColumn,
-  SingleStoreCustomColumnBuilder,
+  PgCustomColumn,
+  PgCustomColumnBuilder,
   customType
 });
 //# sourceMappingURL=custom.cjs.map

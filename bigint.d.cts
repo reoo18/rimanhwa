@@ -1,53 +1,44 @@
 import type { ColumnBuilderBaseConfig } from "../../column-builder.cjs";
 import type { ColumnBaseConfig } from "../../column.cjs";
 import { entityKind } from "../../entity.cjs";
-import { SingleStoreColumnBuilderWithAutoIncrement, SingleStoreColumnWithAutoIncrement } from "./common.cjs";
-export type SingleStoreBigInt53BuilderInitial<TName extends string> = SingleStoreBigInt53Builder<{
+import { PgColumn } from "./common.cjs";
+import { PgIntColumnBaseBuilder } from "./int.common.cjs";
+export type PgBigInt53BuilderInitial<TName extends string> = PgBigInt53Builder<{
     name: TName;
     dataType: 'number';
-    columnType: 'SingleStoreBigInt53';
+    columnType: 'PgBigInt53';
     data: number;
     driverParam: number | string;
     enumValues: undefined;
 }>;
-export declare class SingleStoreBigInt53Builder<T extends ColumnBuilderBaseConfig<'number', 'SingleStoreBigInt53'>> extends SingleStoreColumnBuilderWithAutoIncrement<T, {
-    unsigned: boolean;
-}> {
+export declare class PgBigInt53Builder<T extends ColumnBuilderBaseConfig<'number', 'PgBigInt53'>> extends PgIntColumnBaseBuilder<T> {
     static readonly [entityKind]: string;
-    constructor(name: T['name'], unsigned?: boolean);
+    constructor(name: T['name']);
 }
-export declare class SingleStoreBigInt53<T extends ColumnBaseConfig<'number', 'SingleStoreBigInt53'>> extends SingleStoreColumnWithAutoIncrement<T, {
-    unsigned: boolean;
-}> {
+export declare class PgBigInt53<T extends ColumnBaseConfig<'number', 'PgBigInt53'>> extends PgColumn<T> {
     static readonly [entityKind]: string;
     getSQLType(): string;
     mapFromDriverValue(value: number | string): number;
 }
-export type SingleStoreBigInt64BuilderInitial<TName extends string> = SingleStoreBigInt64Builder<{
+export type PgBigInt64BuilderInitial<TName extends string> = PgBigInt64Builder<{
     name: TName;
     dataType: 'bigint';
-    columnType: 'SingleStoreBigInt64';
+    columnType: 'PgBigInt64';
     data: bigint;
     driverParam: string;
     enumValues: undefined;
-    generated: undefined;
 }>;
-export declare class SingleStoreBigInt64Builder<T extends ColumnBuilderBaseConfig<'bigint', 'SingleStoreBigInt64'>> extends SingleStoreColumnBuilderWithAutoIncrement<T, {
-    unsigned: boolean;
-}> {
+export declare class PgBigInt64Builder<T extends ColumnBuilderBaseConfig<'bigint', 'PgBigInt64'>> extends PgIntColumnBaseBuilder<T> {
     static readonly [entityKind]: string;
-    constructor(name: T['name'], unsigned?: boolean);
+    constructor(name: T['name']);
 }
-export declare class SingleStoreBigInt64<T extends ColumnBaseConfig<'bigint', 'SingleStoreBigInt64'>> extends SingleStoreColumnWithAutoIncrement<T, {
-    unsigned: boolean;
-}> {
+export declare class PgBigInt64<T extends ColumnBaseConfig<'bigint', 'PgBigInt64'>> extends PgColumn<T> {
     static readonly [entityKind]: string;
     getSQLType(): string;
     mapFromDriverValue(value: string): bigint;
 }
-export interface SingleStoreBigIntConfig<T extends 'number' | 'bigint' = 'number' | 'bigint'> {
+export interface PgBigIntConfig<T extends 'number' | 'bigint' = 'number' | 'bigint'> {
     mode: T;
-    unsigned?: boolean;
 }
-export declare function bigint<TMode extends SingleStoreBigIntConfig['mode']>(config: SingleStoreBigIntConfig<TMode>): TMode extends 'number' ? SingleStoreBigInt53BuilderInitial<''> : SingleStoreBigInt64BuilderInitial<''>;
-export declare function bigint<TName extends string, TMode extends SingleStoreBigIntConfig['mode']>(name: TName, config: SingleStoreBigIntConfig<TMode>): TMode extends 'number' ? SingleStoreBigInt53BuilderInitial<TName> : SingleStoreBigInt64BuilderInitial<TName>;
+export declare function bigint<TMode extends PgBigIntConfig['mode']>(config: PgBigIntConfig<TMode>): TMode extends 'number' ? PgBigInt53BuilderInitial<''> : PgBigInt64BuilderInitial<''>;
+export declare function bigint<TName extends string, TMode extends PgBigIntConfig['mode']>(name: TName, config: PgBigIntConfig<TMode>): TMode extends 'number' ? PgBigInt53BuilderInitial<TName> : PgBigInt64BuilderInitial<TName>;

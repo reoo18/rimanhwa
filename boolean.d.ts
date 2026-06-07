@@ -1,24 +1,22 @@
 import type { ColumnBuilderBaseConfig } from "../../column-builder.js";
 import type { ColumnBaseConfig } from "../../column.js";
 import { entityKind } from "../../entity.js";
-import { SingleStoreColumn, SingleStoreColumnBuilder } from "./common.js";
-export type SingleStoreBooleanBuilderInitial<TName extends string> = SingleStoreBooleanBuilder<{
+import { PgColumn, PgColumnBuilder } from "./common.js";
+export type PgBooleanBuilderInitial<TName extends string> = PgBooleanBuilder<{
     name: TName;
     dataType: 'boolean';
-    columnType: 'SingleStoreBoolean';
+    columnType: 'PgBoolean';
     data: boolean;
-    driverParam: number | boolean;
+    driverParam: boolean;
     enumValues: undefined;
-    generated: undefined;
 }>;
-export declare class SingleStoreBooleanBuilder<T extends ColumnBuilderBaseConfig<'boolean', 'SingleStoreBoolean'>> extends SingleStoreColumnBuilder<T> {
+export declare class PgBooleanBuilder<T extends ColumnBuilderBaseConfig<'boolean', 'PgBoolean'>> extends PgColumnBuilder<T> {
     static readonly [entityKind]: string;
     constructor(name: T['name']);
 }
-export declare class SingleStoreBoolean<T extends ColumnBaseConfig<'boolean', 'SingleStoreBoolean'>> extends SingleStoreColumn<T> {
+export declare class PgBoolean<T extends ColumnBaseConfig<'boolean', 'PgBoolean'>> extends PgColumn<T> {
     static readonly [entityKind]: string;
     getSQLType(): string;
-    mapFromDriverValue(value: number | boolean): boolean;
 }
-export declare function boolean(): SingleStoreBooleanBuilderInitial<''>;
-export declare function boolean<TName extends string>(name: TName): SingleStoreBooleanBuilderInitial<TName>;
+export declare function boolean(): PgBooleanBuilderInitial<''>;
+export declare function boolean<TName extends string>(name: TName): PgBooleanBuilderInitial<TName>;

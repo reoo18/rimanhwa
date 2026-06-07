@@ -18,76 +18,76 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var date_exports = {};
 __export(date_exports, {
-  SingleStoreDate: () => SingleStoreDate,
-  SingleStoreDateBuilder: () => SingleStoreDateBuilder,
-  SingleStoreDateString: () => SingleStoreDateString,
-  SingleStoreDateStringBuilder: () => SingleStoreDateStringBuilder,
+  PgDate: () => PgDate,
+  PgDateBuilder: () => PgDateBuilder,
+  PgDateString: () => PgDateString,
+  PgDateStringBuilder: () => PgDateStringBuilder,
   date: () => date
 });
 module.exports = __toCommonJS(date_exports);
 var import_entity = require("../../entity.cjs");
 var import_utils = require("../../utils.cjs");
 var import_common = require("./common.cjs");
-class SingleStoreDateBuilder extends import_common.SingleStoreColumnBuilder {
-  static [import_entity.entityKind] = "SingleStoreDateBuilder";
+var import_date_common = require("./date.common.cjs");
+class PgDateBuilder extends import_date_common.PgDateColumnBaseBuilder {
+  static [import_entity.entityKind] = "PgDateBuilder";
   constructor(name) {
-    super(name, "date", "SingleStoreDate");
+    super(name, "date", "PgDate");
   }
   /** @internal */
   build(table) {
-    return new SingleStoreDate(
-      table,
-      this.config
-    );
+    return new PgDate(table, this.config);
   }
 }
-class SingleStoreDate extends import_common.SingleStoreColumn {
-  static [import_entity.entityKind] = "SingleStoreDate";
-  constructor(table, config) {
-    super(table, config);
-  }
+class PgDate extends import_common.PgColumn {
+  static [import_entity.entityKind] = "PgDate";
   getSQLType() {
-    return `date`;
+    return "date";
   }
   mapFromDriverValue(value) {
-    return new Date(value);
+    if (typeof value === "string") return new Date(value);
+    return value;
+  }
+  mapToDriverValue(value) {
+    return value.toISOString();
   }
 }
-class SingleStoreDateStringBuilder extends import_common.SingleStoreColumnBuilder {
-  static [import_entity.entityKind] = "SingleStoreDateStringBuilder";
+class PgDateStringBuilder extends import_date_common.PgDateColumnBaseBuilder {
+  static [import_entity.entityKind] = "PgDateStringBuilder";
   constructor(name) {
-    super(name, "string", "SingleStoreDateString");
+    super(name, "string", "PgDateString");
   }
   /** @internal */
   build(table) {
-    return new SingleStoreDateString(
+    return new PgDateString(
       table,
       this.config
     );
   }
 }
-class SingleStoreDateString extends import_common.SingleStoreColumn {
-  static [import_entity.entityKind] = "SingleStoreDateString";
-  constructor(table, config) {
-    super(table, config);
-  }
+class PgDateString extends import_common.PgColumn {
+  static [import_entity.entityKind] = "PgDateString";
   getSQLType() {
-    return `date`;
+    return "date";
+  }
+  mapFromDriverValue(value) {
+    if (typeof value === "string") return value;
+    return value.toISOString().slice(0, -14);
   }
 }
 function date(a, b) {
   const { name, config } = (0, import_utils.getColumnNameAndConfig)(a, b);
-  if (config?.mode === "string") {
-    return new SingleStoreDateStringBuilder(name);
+  if (config?.mode === "date") {
+    return new PgDateBuilder(name);
   }
-  return new SingleStoreDateBuilder(name);
+  return new PgDateStringBuilder(name);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreDate,
-  SingleStoreDateBuilder,
-  SingleStoreDateString,
-  SingleStoreDateStringBuilder,
+  PgDate,
+  PgDateBuilder,
+  PgDateString,
+  PgDateStringBuilder,
   date
 });
 //# sourceMappingURL=date.cjs.map

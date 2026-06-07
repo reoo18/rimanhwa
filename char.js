@@ -1,36 +1,36 @@
 import { entityKind } from "../../entity.js";
 import { getColumnNameAndConfig } from "../../utils.js";
-import { SingleStoreColumn, SingleStoreColumnBuilder } from "./common.js";
-class SingleStoreCharBuilder extends SingleStoreColumnBuilder {
-  static [entityKind] = "SingleStoreCharBuilder";
+import { PgColumn, PgColumnBuilder } from "./common.js";
+class PgCharBuilder extends PgColumnBuilder {
+  static [entityKind] = "PgCharBuilder";
   constructor(name, config) {
-    super(name, "string", "SingleStoreChar");
+    super(name, "string", "PgChar");
     this.config.length = config.length;
-    this.config.enum = config.enum;
+    this.config.enumValues = config.enum;
   }
   /** @internal */
   build(table) {
-    return new SingleStoreChar(
+    return new PgChar(
       table,
       this.config
     );
   }
 }
-class SingleStoreChar extends SingleStoreColumn {
-  static [entityKind] = "SingleStoreChar";
+class PgChar extends PgColumn {
+  static [entityKind] = "PgChar";
   length = this.config.length;
-  enumValues = this.config.enum;
+  enumValues = this.config.enumValues;
   getSQLType() {
     return this.length === void 0 ? `char` : `char(${this.length})`;
   }
 }
 function char(a, b = {}) {
   const { name, config } = getColumnNameAndConfig(a, b);
-  return new SingleStoreCharBuilder(name, config);
+  return new PgCharBuilder(name, config);
 }
 export {
-  SingleStoreChar,
-  SingleStoreCharBuilder,
+  PgChar,
+  PgCharBuilder,
   char
 };
 //# sourceMappingURL=char.js.map

@@ -1,23 +1,23 @@
 import { entityKind } from "../../entity.js";
 import { getColumnNameAndConfig } from "../../utils.js";
-import { SingleStoreColumn, SingleStoreColumnBuilder } from "./common.js";
-class SingleStoreCustomColumnBuilder extends SingleStoreColumnBuilder {
-  static [entityKind] = "SingleStoreCustomColumnBuilder";
+import { PgColumn, PgColumnBuilder } from "./common.js";
+class PgCustomColumnBuilder extends PgColumnBuilder {
+  static [entityKind] = "PgCustomColumnBuilder";
   constructor(name, fieldConfig, customTypeParams) {
-    super(name, "custom", "SingleStoreCustomColumn");
+    super(name, "custom", "PgCustomColumn");
     this.config.fieldConfig = fieldConfig;
     this.config.customTypeParams = customTypeParams;
   }
   /** @internal */
   build(table) {
-    return new SingleStoreCustomColumn(
+    return new PgCustomColumn(
       table,
       this.config
     );
   }
 }
-class SingleStoreCustomColumn extends SingleStoreColumn {
-  static [entityKind] = "SingleStoreCustomColumn";
+class PgCustomColumn extends PgColumn {
+  static [entityKind] = "PgCustomColumn";
   sqlName;
   mapTo;
   mapFrom;
@@ -40,12 +40,12 @@ class SingleStoreCustomColumn extends SingleStoreColumn {
 function customType(customTypeParams) {
   return (a, b) => {
     const { name, config } = getColumnNameAndConfig(a, b);
-    return new SingleStoreCustomColumnBuilder(name, config, customTypeParams);
+    return new PgCustomColumnBuilder(name, config, customTypeParams);
   };
 }
 export {
-  SingleStoreCustomColumn,
-  SingleStoreCustomColumnBuilder,
+  PgCustomColumn,
+  PgCustomColumnBuilder,
   customType
 };
 //# sourceMappingURL=custom.js.map

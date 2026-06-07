@@ -1,36 +1,27 @@
 import { entityKind } from "../../entity.js";
-import { SingleStoreColumn, SingleStoreColumnBuilder } from "./common.js";
-class SingleStoreBooleanBuilder extends SingleStoreColumnBuilder {
-  static [entityKind] = "SingleStoreBooleanBuilder";
+import { PgColumn, PgColumnBuilder } from "./common.js";
+class PgBooleanBuilder extends PgColumnBuilder {
+  static [entityKind] = "PgBooleanBuilder";
   constructor(name) {
-    super(name, "boolean", "SingleStoreBoolean");
+    super(name, "boolean", "PgBoolean");
   }
   /** @internal */
   build(table) {
-    return new SingleStoreBoolean(
-      table,
-      this.config
-    );
+    return new PgBoolean(table, this.config);
   }
 }
-class SingleStoreBoolean extends SingleStoreColumn {
-  static [entityKind] = "SingleStoreBoolean";
+class PgBoolean extends PgColumn {
+  static [entityKind] = "PgBoolean";
   getSQLType() {
     return "boolean";
   }
-  mapFromDriverValue(value) {
-    if (typeof value === "boolean") {
-      return value;
-    }
-    return value === 1;
-  }
 }
 function boolean(name) {
-  return new SingleStoreBooleanBuilder(name ?? "");
+  return new PgBooleanBuilder(name ?? "");
 }
 export {
-  SingleStoreBoolean,
-  SingleStoreBooleanBuilder,
+  PgBoolean,
+  PgBooleanBuilder,
   boolean
 };
 //# sourceMappingURL=boolean.js.map

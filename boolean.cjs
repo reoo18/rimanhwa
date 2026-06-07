@@ -18,45 +18,36 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var boolean_exports = {};
 __export(boolean_exports, {
-  SingleStoreBoolean: () => SingleStoreBoolean,
-  SingleStoreBooleanBuilder: () => SingleStoreBooleanBuilder,
+  PgBoolean: () => PgBoolean,
+  PgBooleanBuilder: () => PgBooleanBuilder,
   boolean: () => boolean
 });
 module.exports = __toCommonJS(boolean_exports);
 var import_entity = require("../../entity.cjs");
 var import_common = require("./common.cjs");
-class SingleStoreBooleanBuilder extends import_common.SingleStoreColumnBuilder {
-  static [import_entity.entityKind] = "SingleStoreBooleanBuilder";
+class PgBooleanBuilder extends import_common.PgColumnBuilder {
+  static [import_entity.entityKind] = "PgBooleanBuilder";
   constructor(name) {
-    super(name, "boolean", "SingleStoreBoolean");
+    super(name, "boolean", "PgBoolean");
   }
   /** @internal */
   build(table) {
-    return new SingleStoreBoolean(
-      table,
-      this.config
-    );
+    return new PgBoolean(table, this.config);
   }
 }
-class SingleStoreBoolean extends import_common.SingleStoreColumn {
-  static [import_entity.entityKind] = "SingleStoreBoolean";
+class PgBoolean extends import_common.PgColumn {
+  static [import_entity.entityKind] = "PgBoolean";
   getSQLType() {
     return "boolean";
   }
-  mapFromDriverValue(value) {
-    if (typeof value === "boolean") {
-      return value;
-    }
-    return value === 1;
-  }
 }
 function boolean(name) {
-  return new SingleStoreBooleanBuilder(name ?? "");
+  return new PgBooleanBuilder(name ?? "");
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreBoolean,
-  SingleStoreBooleanBuilder,
+  PgBoolean,
+  PgBooleanBuilder,
   boolean
 });
 //# sourceMappingURL=boolean.cjs.map

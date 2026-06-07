@@ -2,39 +2,44 @@ import type { ColumnBuilderBaseConfig } from "../../column-builder.js";
 import type { ColumnBaseConfig } from "../../column.js";
 import { entityKind } from "../../entity.js";
 import { type Writable } from "../../utils.js";
-import { SingleStoreColumn, SingleStoreColumnBuilder } from "./common.js";
-export type SingleStoreCharBuilderInitial<TName extends string, TEnum extends [string, ...string[]], TLength extends number | undefined> = SingleStoreCharBuilder<{
+import { PgColumn, PgColumnBuilder } from "./common.js";
+export type PgCharBuilderInitial<TName extends string, TEnum extends [string, ...string[]], TLength extends number | undefined> = PgCharBuilder<{
     name: TName;
     dataType: 'string';
-    columnType: 'SingleStoreChar';
+    columnType: 'PgChar';
     data: TEnum[number];
-    driverParam: number | string;
     enumValues: TEnum;
-    generated: undefined;
+    driverParam: string;
     length: TLength;
 }>;
-export declare class SingleStoreCharBuilder<T extends ColumnBuilderBaseConfig<'string', 'SingleStoreChar'> & {
+export declare class PgCharBuilder<T extends ColumnBuilderBaseConfig<'string', 'PgChar'> & {
     length?: number | undefined;
-}> extends SingleStoreColumnBuilder<T, SingleStoreCharConfig<T['enumValues'], T['length']>, {
+}> extends PgColumnBuilder<T, {
+    length: T['length'];
+    enumValues: T['enumValues'];
+}, {
     length: T['length'];
 }> {
     static readonly [entityKind]: string;
-    constructor(name: T['name'], config: SingleStoreCharConfig<T['enumValues'], T['length']>);
+    constructor(name: T['name'], config: PgCharConfig<T['enumValues'], T['length']>);
 }
-export declare class SingleStoreChar<T extends ColumnBaseConfig<'string', 'SingleStoreChar'> & {
+export declare class PgChar<T extends ColumnBaseConfig<'string', 'PgChar'> & {
     length?: number | undefined;
-}> extends SingleStoreColumn<T, SingleStoreCharConfig<T['enumValues'], T['length']>, {
+}> extends PgColumn<T, {
+    length: T['length'];
+    enumValues: T['enumValues'];
+}, {
     length: T['length'];
 }> {
     static readonly [entityKind]: string;
-    readonly length: T['length'];
-    readonly enumValues: T["enumValues"] | undefined;
+    readonly length: T["length"];
+    readonly enumValues: T["enumValues"];
     getSQLType(): string;
 }
-export interface SingleStoreCharConfig<TEnum extends readonly string[] | string[] | undefined = readonly string[] | string[] | undefined, TLength extends number | undefined = number | undefined> {
+export interface PgCharConfig<TEnum extends readonly string[] | string[] | undefined = readonly string[] | string[] | undefined, TLength extends number | undefined = number | undefined> {
     enum?: TEnum;
     length?: TLength;
 }
-export declare function char(): SingleStoreCharBuilderInitial<'', [string, ...string[]], undefined>;
-export declare function char<U extends string, T extends Readonly<[U, ...U[]]>, L extends number | undefined>(config?: SingleStoreCharConfig<T | Writable<T>, L>): SingleStoreCharBuilderInitial<'', Writable<T>, L>;
-export declare function char<TName extends string, U extends string, T extends Readonly<[U, ...U[]]>, L extends number | undefined>(name: TName, config?: SingleStoreCharConfig<T | Writable<T>, L>): SingleStoreCharBuilderInitial<TName, Writable<T>, L>;
+export declare function char(): PgCharBuilderInitial<'', [string, ...string[]], undefined>;
+export declare function char<U extends string, T extends Readonly<[U, ...U[]]>, L extends number | undefined>(config?: PgCharConfig<T | Writable<T>, L>): PgCharBuilderInitial<'', Writable<T>, L>;
+export declare function char<TName extends string, U extends string, T extends Readonly<[U, ...U[]]>, L extends number | undefined>(name: TName, config?: PgCharConfig<T | Writable<T>, L>): PgCharBuilderInitial<TName, Writable<T>, L>;

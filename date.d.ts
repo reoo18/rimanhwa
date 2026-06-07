@@ -1,53 +1,47 @@
 import type { ColumnBuilderBaseConfig } from "../../column-builder.js";
 import type { ColumnBaseConfig } from "../../column.js";
 import { entityKind } from "../../entity.js";
-import type { AnySingleStoreTable } from "../table.js";
 import { type Equal } from "../../utils.js";
-import { SingleStoreColumn, SingleStoreColumnBuilder } from "./common.js";
-export type SingleStoreDateBuilderInitial<TName extends string> = SingleStoreDateBuilder<{
+import { PgColumn } from "./common.js";
+import { PgDateColumnBaseBuilder } from "./date.common.js";
+export type PgDateBuilderInitial<TName extends string> = PgDateBuilder<{
     name: TName;
     dataType: 'date';
-    columnType: 'SingleStoreDate';
+    columnType: 'PgDate';
     data: Date;
-    driverParam: string | number;
+    driverParam: string;
     enumValues: undefined;
-    generated: undefined;
 }>;
-export declare class SingleStoreDateBuilder<T extends ColumnBuilderBaseConfig<'date', 'SingleStoreDate'>> extends SingleStoreColumnBuilder<T> {
+export declare class PgDateBuilder<T extends ColumnBuilderBaseConfig<'date', 'PgDate'>> extends PgDateColumnBaseBuilder<T> {
     static readonly [entityKind]: string;
     constructor(name: T['name']);
 }
-export declare class SingleStoreDate<T extends ColumnBaseConfig<'date', 'SingleStoreDate'>> extends SingleStoreColumn<T> {
+export declare class PgDate<T extends ColumnBaseConfig<'date', 'PgDate'>> extends PgColumn<T> {
     static readonly [entityKind]: string;
-    constructor(table: AnySingleStoreTable<{
-        name: T['tableName'];
-    }>, config: SingleStoreDateBuilder<T>['config']);
     getSQLType(): string;
-    mapFromDriverValue(value: string): Date;
+    mapFromDriverValue(value: string | Date): Date;
+    mapToDriverValue(value: Date): string;
 }
-export type SingleStoreDateStringBuilderInitial<TName extends string> = SingleStoreDateStringBuilder<{
+export type PgDateStringBuilderInitial<TName extends string> = PgDateStringBuilder<{
     name: TName;
     dataType: 'string';
-    columnType: 'SingleStoreDateString';
+    columnType: 'PgDateString';
     data: string;
-    driverParam: string | number;
+    driverParam: string;
     enumValues: undefined;
-    generated: undefined;
 }>;
-export declare class SingleStoreDateStringBuilder<T extends ColumnBuilderBaseConfig<'string', 'SingleStoreDateString'>> extends SingleStoreColumnBuilder<T> {
+export declare class PgDateStringBuilder<T extends ColumnBuilderBaseConfig<'string', 'PgDateString'>> extends PgDateColumnBaseBuilder<T> {
     static readonly [entityKind]: string;
     constructor(name: T['name']);
 }
-export declare class SingleStoreDateString<T extends ColumnBaseConfig<'string', 'SingleStoreDateString'>> extends SingleStoreColumn<T> {
+export declare class PgDateString<T extends ColumnBaseConfig<'string', 'PgDateString'>> extends PgColumn<T> {
     static readonly [entityKind]: string;
-    constructor(table: AnySingleStoreTable<{
-        name: T['tableName'];
-    }>, config: SingleStoreDateStringBuilder<T>['config']);
     getSQLType(): string;
+    mapFromDriverValue(value: Date | string): string;
 }
-export interface SingleStoreDateConfig<TMode extends 'date' | 'string' = 'date' | 'string'> {
-    mode?: TMode;
+export interface PgDateConfig<T extends 'date' | 'string' = 'date' | 'string'> {
+    mode: T;
 }
-export declare function date(): SingleStoreDateBuilderInitial<''>;
-export declare function date<TMode extends SingleStoreDateConfig['mode'] & {}>(config?: SingleStoreDateConfig<TMode>): Equal<TMode, 'string'> extends true ? SingleStoreDateStringBuilderInitial<''> : SingleStoreDateBuilderInitial<''>;
-export declare function date<TName extends string, TMode extends SingleStoreDateConfig['mode'] & {}>(name: TName, config?: SingleStoreDateConfig<TMode>): Equal<TMode, 'string'> extends true ? SingleStoreDateStringBuilderInitial<TName> : SingleStoreDateBuilderInitial<TName>;
+export declare function date(): PgDateStringBuilderInitial<''>;
+export declare function date<TMode extends PgDateConfig['mode'] & {}>(config?: PgDateConfig<TMode>): Equal<TMode, 'date'> extends true ? PgDateBuilderInitial<''> : PgDateStringBuilderInitial<''>;
+export declare function date<TName extends string, TMode extends PgDateConfig['mode'] & {}>(name: TName, config?: PgDateConfig<TMode>): Equal<TMode, 'date'> extends true ? PgDateBuilderInitial<TName> : PgDateStringBuilderInitial<TName>;

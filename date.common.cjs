@@ -18,31 +18,20 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var date_common_exports = {};
 __export(date_common_exports, {
-  SingleStoreDateBaseColumn: () => SingleStoreDateBaseColumn,
-  SingleStoreDateColumnBaseBuilder: () => SingleStoreDateColumnBaseBuilder
+  PgDateColumnBaseBuilder: () => PgDateColumnBaseBuilder
 });
 module.exports = __toCommonJS(date_common_exports);
 var import_entity = require("../../entity.cjs");
 var import_sql = require("../../sql/sql.cjs");
 var import_common = require("./common.cjs");
-class SingleStoreDateColumnBaseBuilder extends import_common.SingleStoreColumnBuilder {
-  static [import_entity.entityKind] = "SingleStoreDateColumnBuilder";
+class PgDateColumnBaseBuilder extends import_common.PgColumnBuilder {
+  static [import_entity.entityKind] = "PgDateColumnBaseBuilder";
   defaultNow() {
     return this.default(import_sql.sql`now()`);
   }
-  onUpdateNow() {
-    this.config.hasOnUpdateNow = true;
-    this.config.hasDefault = true;
-    return this;
-  }
-}
-class SingleStoreDateBaseColumn extends import_common.SingleStoreColumn {
-  static [import_entity.entityKind] = "SingleStoreDateColumn";
-  hasOnUpdateNow = this.config.hasOnUpdateNow;
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreDateBaseColumn,
-  SingleStoreDateColumnBaseBuilder
+  PgDateColumnBaseBuilder
 });
 //# sourceMappingURL=date.common.cjs.map

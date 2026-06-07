@@ -16,47 +16,47 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var char_exports = {};
-__export(char_exports, {
-  PgChar: () => PgChar,
-  PgCharBuilder: () => PgCharBuilder,
-  char: () => char
+var double_precision_exports = {};
+__export(double_precision_exports, {
+  PgDoublePrecision: () => PgDoublePrecision,
+  PgDoublePrecisionBuilder: () => PgDoublePrecisionBuilder,
+  doublePrecision: () => doublePrecision
 });
-module.exports = __toCommonJS(char_exports);
+module.exports = __toCommonJS(double_precision_exports);
 var import_entity = require("../../entity.cjs");
-var import_utils = require("../../utils.cjs");
 var import_common = require("./common.cjs");
-class PgCharBuilder extends import_common.PgColumnBuilder {
-  static [import_entity.entityKind] = "PgCharBuilder";
-  constructor(name, config) {
-    super(name, "string", "PgChar");
-    this.config.length = config.length;
-    this.config.enumValues = config.enum;
+class PgDoublePrecisionBuilder extends import_common.PgColumnBuilder {
+  static [import_entity.entityKind] = "PgDoublePrecisionBuilder";
+  constructor(name) {
+    super(name, "number", "PgDoublePrecision");
   }
   /** @internal */
   build(table) {
-    return new PgChar(
+    return new PgDoublePrecision(
       table,
       this.config
     );
   }
 }
-class PgChar extends import_common.PgColumn {
-  static [import_entity.entityKind] = "PgChar";
-  length = this.config.length;
-  enumValues = this.config.enumValues;
+class PgDoublePrecision extends import_common.PgColumn {
+  static [import_entity.entityKind] = "PgDoublePrecision";
   getSQLType() {
-    return this.length === void 0 ? `char` : `char(${this.length})`;
+    return "double precision";
+  }
+  mapFromDriverValue(value) {
+    if (typeof value === "string") {
+      return Number.parseFloat(value);
+    }
+    return value;
   }
 }
-function char(a, b = {}) {
-  const { name, config } = (0, import_utils.getColumnNameAndConfig)(a, b);
-  return new PgCharBuilder(name, config);
+function doublePrecision(name) {
+  return new PgDoublePrecisionBuilder(name ?? "");
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  PgChar,
-  PgCharBuilder,
-  char
+  PgDoublePrecision,
+  PgDoublePrecisionBuilder,
+  doublePrecision
 });
-//# sourceMappingURL=char.cjs.map
+//# sourceMappingURL=double-precision.cjs.map

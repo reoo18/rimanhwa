@@ -1,43 +1,42 @@
 import type { ColumnBuilderBaseConfig } from "../../column-builder.cjs";
 import type { ColumnBaseConfig } from "../../column.cjs";
 import { entityKind } from "../../entity.cjs";
-import type { AnySingleStoreTable } from "../table.cjs";
+import type { AnyPgTable } from "../table.cjs";
 import type { SQL } from "../../sql/sql.cjs";
 import { type Equal } from "../../utils.cjs";
-import { SingleStoreColumn, SingleStoreColumnBuilder } from "./common.cjs";
+import { PgColumn, PgColumnBuilder } from "./common.cjs";
 export type ConvertCustomConfig<TName extends string, T extends Partial<CustomTypeValues>> = {
     name: TName;
     dataType: 'custom';
-    columnType: 'SingleStoreCustomColumn';
+    columnType: 'PgCustomColumn';
     data: T['data'];
     driverParam: T['driverData'];
     enumValues: undefined;
-    generated: undefined;
 } & (T['notNull'] extends true ? {
     notNull: true;
 } : {}) & (T['default'] extends true ? {
     hasDefault: true;
 } : {});
-export interface SingleStoreCustomColumnInnerConfig {
+export interface PgCustomColumnInnerConfig {
     customTypeValues: CustomTypeValues;
 }
-export declare class SingleStoreCustomColumnBuilder<T extends ColumnBuilderBaseConfig<'custom', 'SingleStoreCustomColumn'>> extends SingleStoreColumnBuilder<T, {
+export declare class PgCustomColumnBuilder<T extends ColumnBuilderBaseConfig<'custom', 'PgCustomColumn'>> extends PgColumnBuilder<T, {
     fieldConfig: CustomTypeValues['config'];
     customTypeParams: CustomTypeParams<any>;
 }, {
-    singlestoreColumnBuilderBrand: 'SingleStoreCustomColumnBuilderBrand';
+    pgColumnBuilderBrand: 'PgCustomColumnBuilderBrand';
 }> {
     static readonly [entityKind]: string;
     constructor(name: T['name'], fieldConfig: CustomTypeValues['config'], customTypeParams: CustomTypeParams<any>);
 }
-export declare class SingleStoreCustomColumn<T extends ColumnBaseConfig<'custom', 'SingleStoreCustomColumn'>> extends SingleStoreColumn<T> {
+export declare class PgCustomColumn<T extends ColumnBaseConfig<'custom', 'PgCustomColumn'>> extends PgColumn<T> {
     static readonly [entityKind]: string;
     private sqlName;
     private mapTo?;
     private mapFrom?;
-    constructor(table: AnySingleStoreTable<{
+    constructor(table: AnyPgTable<{
         name: T['tableName'];
-    }>, config: SingleStoreCustomColumnBuilder<T>['config']);
+    }>, config: PgCustomColumnBuilder<T>['config']);
     getSQLType(): string;
     mapFromDriverValue(value: T['driverParam']): T['data'];
     mapToDriverValue(value: T['data']): T['driverParam'];
@@ -144,13 +143,13 @@ export interface CustomTypeParams<T extends CustomTypeValues> {
     fromDriver?: (value: T['driverData']) => T['data'];
 }
 /**
- * Custom singlestore database data type generator
+ * Custom pg database data type generator
  */
 export declare function customType<T extends CustomTypeValues = CustomTypeValues>(customTypeParams: CustomTypeParams<T>): Equal<T['configRequired'], true> extends true ? {
-    <TConfig extends Record<string, any> & T['config']>(fieldConfig: TConfig): SingleStoreCustomColumnBuilder<ConvertCustomConfig<'', T>>;
-    <TName extends string>(dbName: TName, fieldConfig: T['config']): SingleStoreCustomColumnBuilder<ConvertCustomConfig<TName, T>>;
+    <TConfig extends Record<string, any> & T['config']>(fieldConfig: TConfig): PgCustomColumnBuilder<ConvertCustomConfig<'', T>>;
+    <TName extends string>(dbName: TName, fieldConfig: T['config']): PgCustomColumnBuilder<ConvertCustomConfig<TName, T>>;
 } : {
-    (): SingleStoreCustomColumnBuilder<ConvertCustomConfig<'', T>>;
-    <TConfig extends Record<string, any> & T['config']>(fieldConfig?: TConfig): SingleStoreCustomColumnBuilder<ConvertCustomConfig<'', T>>;
-    <TName extends string>(dbName: TName, fieldConfig?: T['config']): SingleStoreCustomColumnBuilder<ConvertCustomConfig<TName, T>>;
+    (): PgCustomColumnBuilder<ConvertCustomConfig<'', T>>;
+    <TConfig extends Record<string, any> & T['config']>(fieldConfig?: TConfig): PgCustomColumnBuilder<ConvertCustomConfig<'', T>>;
+    <TName extends string>(dbName: TName, fieldConfig?: T['config']): PgCustomColumnBuilder<ConvertCustomConfig<TName, T>>;
 };
