@@ -1,0 +1,21 @@
+
+> "I need to expand my current scraper script to support a second source website. Please implement the following architecture to ensure data integrity and prevent duplicates:
+> **1. Multi-Source Configuration:**
+>  * Update the code to define a list of sources, where each source has its own parsing configuration (CSS selectors, base URL, etc.).
+>  * Create a modular function scrape_source(source_config) that can handle any source passed to it.
+> **2. Duplicate Prevention Logic (The 'Check-Before-Insert' Algorithm):**
+>  * Before saving any new manhwa: Use a query to check if the 'manhwa_title' exists in the database. If it exists, retrieve its ID. If not, create a new record and get the new ID.
+>  * Before saving any new chapter: Use a query to check if a record with the same 'manhwa_id' AND 'chapter_number' already exists in the database.
+>  * ONLY perform the INSERT operation if the record does not exist.
+> **3. Unified Database Schema:**
+>  * Ensure all scrapers map the data into the same structure: manhwa_title, chapter_number, image_urls, source_url, and scraped_at.
+> **4. Implementation Steps:**
+>  * Create a separate parser file/function for the second website, as the HTML structure is different from the first.
+>  * Integrate a 'main' execution loop that iterates through all enabled sources and runs the scraping process one by one.
+>  * Add a simple log (print statement) to report how many new chapters were added and how many duplicates were ignored for each source."
+> 
+### نصائح تقنية إضافية لك قبل التنفيذ:
+ 1. **قاعدة البيانات (Database):** تأكد أن الحقول (Fields) التي تستخدمها للتحقق (مثل manhwa_title و chapter_number) مضبوطة كـ **"Unique"** في قاعدة بياناتك (إذا كنت تستخدم SQLite أو PostgreSQL)، هذا يوفر طبقة حماية ثانية ضد التكرار برمجياً.
+ 2. **التنظيف (Data Normalization):** عند إضافة الموقع الثاني، قد تجد أن الموقع الأول يكتب اسم المانهوا "Solo Leveling" والموقع الثاني يكتبه "Solo-Leveling". اطلب من الـ AI إضافة **"String Normalization"** (تحويل الحروف لـ lowercase وحذف المسافات الزائدة) عند المقارنة، لضمان عدم حدوث تكرار بسبب اختلاف بسيط في الكتابة.
+ 3. **سجل العمليات (Logs):** كما طلبت في التعليمات، سيعطيك الـ AI تقريراً يخبرك: "تم إضافة 5 فصول جديدة، تم تجاهل 10 فصول مكررة". هذا سيجعلك تتأكد بنفسك أن "خوارزمية منع التكرار" تعمل بشكل صحيح.
+هل تحتاج مني أن أشرح لك أي جزء من هذه النقاط بشكل مفصل أكثر؟
