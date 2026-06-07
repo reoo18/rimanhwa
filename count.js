@@ -1,24 +1,25 @@
 import { entityKind } from "../../entity.js";
 import { SQL, sql } from "../../sql/sql.js";
-class SQLiteCountBuilder extends SQL {
+class SingleStoreCountBuilder extends SQL {
   constructor(params) {
-    super(SQLiteCountBuilder.buildEmbeddedCount(params.source, params.filters).queryChunks);
+    super(SingleStoreCountBuilder.buildEmbeddedCount(params.source, params.filters).queryChunks);
     this.params = params;
+    this.mapWith(Number);
     this.session = params.session;
-    this.sql = SQLiteCountBuilder.buildCount(
+    this.sql = SingleStoreCountBuilder.buildCount(
       params.source,
       params.filters
     );
   }
   sql;
-  static [entityKind] = "SQLiteCountBuilderAsync";
-  [Symbol.toStringTag] = "SQLiteCountBuilderAsync";
+  static [entityKind] = "SingleStoreCountBuilder";
+  [Symbol.toStringTag] = "SingleStoreCountBuilder";
   session;
   static buildEmbeddedCount(source, filters) {
     return sql`(select count(*) from ${source}${sql.raw(" where ").if(filters)}${filters})`;
   }
   static buildCount(source, filters) {
-    return sql`select count(*) from ${source}${sql.raw(" where ").if(filters)}${filters}`;
+    return sql`select count(*) as count from ${source}${sql.raw(" where ").if(filters)}${filters}`;
   }
   then(onfulfilled, onrejected) {
     return Promise.resolve(this.session.count(this.sql)).then(
@@ -43,6 +44,6 @@ class SQLiteCountBuilder extends SQL {
   }
 }
 export {
-  SQLiteCountBuilder
+  SingleStoreCountBuilder
 };
 //# sourceMappingURL=count.js.map

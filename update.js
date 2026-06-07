@@ -1,27 +1,19 @@
-import { entityKind, is } from "../../entity.js";
+import { entityKind } from "../../entity.js";
 import { QueryPromise } from "../../query-promise.js";
 import { SelectionProxyHandler } from "../../selection-proxy.js";
-import { SQLiteTable } from "../table.js";
-import { Subquery } from "../../subquery.js";
 import { Table } from "../../table.js";
-import {
-  getTableLikeName,
-  mapUpdateSet,
-  orderSelectedFields
-} from "../../utils.js";
-import { ViewBaseConfig } from "../../view-common.js";
+import { mapUpdateSet } from "../../utils.js";
 import { extractUsedTable } from "../utils.js";
-import { SQLiteViewBase } from "../view-base.js";
-class SQLiteUpdateBuilder {
+class SingleStoreUpdateBuilder {
   constructor(table, session, dialect, withList) {
     this.table = table;
     this.session = session;
     this.dialect = dialect;
     this.withList = withList;
   }
-  static [entityKind] = "SQLiteUpdateBuilder";
+  static [entityKind] = "SingleStoreUpdateBuilder";
   set(values) {
-    return new SQLiteUpdateBase(
+    return new SingleStoreUpdateBase(
       this.table,
       mapUpdateSet(this.table, values),
       this.session,
@@ -30,47 +22,15 @@ class SQLiteUpdateBuilder {
     );
   }
 }
-class SQLiteUpdateBase extends QueryPromise {
+class SingleStoreUpdateBase extends QueryPromise {
   constructor(table, set, session, dialect, withList) {
     super();
     this.session = session;
     this.dialect = dialect;
-    this.config = { set, table, withList, joins: [] };
+    this.config = { set, table, withList };
   }
-  static [entityKind] = "SQLiteUpdate";
-  /** @internal */
+  static [entityKind] = "SingleStoreUpdate";
   config;
-  from(source) {
-    this.config.from = source;
-    return this;
-  }
-  createJoin(joinType) {
-    return (table, on) => {
-      const tableName = getTableLikeName(table);
-      if (typeof tableName === "string" && this.config.joins.some((join) => join.alias === tableName)) {
-        throw new Error(`Alias "${tableName}" is already used in this query`);
-      }
-      if (typeof on === "function") {
-        const from = this.config.from ? is(table, SQLiteTable) ? table[Table.Symbol.Columns] : is(table, Subquery) ? table._.selectedFields : is(table, SQLiteViewBase) ? table[ViewBaseConfig].selectedFields : void 0 : void 0;
-        on = on(
-          new Proxy(
-            this.config.table[Table.Symbol.Columns],
-            new SelectionProxyHandler({ sqlAliasedBehavior: "sql", sqlBehavior: "sql" })
-          ),
-          from && new Proxy(
-            from,
-            new SelectionProxyHandler({ sqlAliasedBehavior: "sql", sqlBehavior: "sql" })
-          )
-        );
-      }
-      this.config.joins.push({ on, table, joinType, alias: tableName });
-      return this;
-    };
-  }
-  leftJoin = this.createJoin("left");
-  rightJoin = this.createJoin("right");
-  innerJoin = this.createJoin("inner");
-  fullJoin = this.createJoin("full");
   /**
    * Adds a 'where' clause to the query.
    *
@@ -128,10 +88,6 @@ class SQLiteUpdateBase extends QueryPromise {
     this.config.limit = limit;
     return this;
   }
-  returning(fields = this.config.table[SQLiteTable.Symbol.Columns]) {
-    this.config.returning = orderSelectedFields(fields);
-    return this;
-  }
   /** @internal */
   getSQL() {
     return this.dialect.buildUpdateQuery(this.config);
@@ -140,44 +96,35 @@ class SQLiteUpdateBase extends QueryPromise {
     const { typings: _typings, ...rest } = this.dialect.sqlToQuery(this.getSQL());
     return rest;
   }
-  /** @internal */
-  _prepare(isOneTimeQuery = true) {
-    return this.session[isOneTimeQuery ? "prepareOneTimeQuery" : "prepareQuery"](
+  prepare() {
+    return this.session.prepareQuery(
       this.dialect.sqlToQuery(this.getSQL()),
       this.config.returning,
-      this.config.returning ? "all" : "run",
-      true,
+      void 0,
+      void 0,
       void 0,
       {
-        type: "insert",
+        type: "delete",
         tables: extractUsedTable(this.config.table)
       }
     );
   }
-  prepare() {
-    return this._prepare(false);
-  }
-  run = (placeholderValues) => {
-    return this._prepare().run(placeholderValues);
+  execute = (placeholderValues) => {
+    return this.prepare().execute(placeholderValues);
   };
-  all = (placeholderValues) => {
-    return this._prepare().all(placeholderValues);
+  createIterator = () => {
+    const self = this;
+    return async function* (placeholderValues) {
+      yield* self.prepare().iterator(placeholderValues);
+    };
   };
-  get = (placeholderValues) => {
-    return this._prepare().get(placeholderValues);
-  };
-  values = (placeholderValues) => {
-    return this._prepare().values(placeholderValues);
-  };
-  async execute() {
-    return this.config.returning ? this.all() : this.run();
-  }
+  iterator = this.createIterator();
   $dynamic() {
     return this;
   }
 }
 export {
-  SQLiteUpdateBase,
-  SQLiteUpdateBuilder
+  SingleStoreUpdateBase,
+  SingleStoreUpdateBuilder
 };
 //# sourceMappingURL=update.js.map

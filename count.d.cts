@@ -1,22 +1,21 @@
 import { entityKind } from "../../entity.cjs";
 import { SQL, type SQLWrapper } from "../../sql/sql.cjs";
-import type { SQLiteSession } from "../session.cjs";
-import type { SQLiteTable } from "../table.cjs";
-import type { SQLiteView } from "../view.cjs";
-export declare class SQLiteCountBuilder<TSession extends SQLiteSession<any, any, any, any>> extends SQL<number> implements Promise<number>, SQLWrapper {
+import type { SingleStoreSession } from "../session.cjs";
+import type { SingleStoreTable } from "../table.cjs";
+export declare class SingleStoreCountBuilder<TSession extends SingleStoreSession<any, any, any>> extends SQL<number> implements Promise<number>, SQLWrapper {
     readonly params: {
-        source: SQLiteTable | SQLiteView | SQL | SQLWrapper;
+        source: SingleStoreTable | /* SingleStoreViewBase | */ SQL | SQLWrapper;
         filters?: SQL<unknown>;
         session: TSession;
     };
     private sql;
-    static readonly [entityKind] = "SQLiteCountBuilderAsync";
+    static readonly [entityKind] = "SingleStoreCountBuilder";
     [Symbol.toStringTag]: string;
     private session;
     private static buildEmbeddedCount;
     private static buildCount;
     constructor(params: {
-        source: SQLiteTable | SQLiteView | SQL | SQLWrapper;
+        source: SingleStoreTable | /* SingleStoreViewBase | */ SQL | SQLWrapper;
         filters?: SQL<unknown>;
         session: TSession;
     });

@@ -27,12 +27,12 @@ var import_dialect = require("../dialect.cjs");
 var import_subquery = require("../../subquery.cjs");
 var import_select = require("./select.cjs");
 class QueryBuilder {
-  static [import_entity.entityKind] = "SQLiteQueryBuilder";
+  static [import_entity.entityKind] = "SingleStoreQueryBuilder";
   dialect;
   dialectConfig;
   constructor(dialect) {
-    this.dialect = (0, import_entity.is)(dialect, import_dialect.SQLiteDialect) ? dialect : void 0;
-    this.dialectConfig = (0, import_entity.is)(dialect, import_dialect.SQLiteDialect) ? void 0 : dialect;
+    this.dialect = (0, import_entity.is)(dialect, import_dialect.SingleStoreDialect) ? dialect : void 0;
+    this.dialectConfig = (0, import_entity.is)(dialect, import_dialect.SingleStoreDialect) ? void 0 : dialect;
   }
   $with = (alias, selection) => {
     const queryBuilder = this;
@@ -55,7 +55,7 @@ class QueryBuilder {
   with(...queries) {
     const self = this;
     function select(fields) {
-      return new import_select.SQLiteSelectBuilder({
+      return new import_select.SingleStoreSelectBuilder({
         fields: fields ?? void 0,
         session: void 0,
         dialect: self.getDialect(),
@@ -63,7 +63,7 @@ class QueryBuilder {
       });
     }
     function selectDistinct(fields) {
-      return new import_select.SQLiteSelectBuilder({
+      return new import_select.SingleStoreSelectBuilder({
         fields: fields ?? void 0,
         session: void 0,
         dialect: self.getDialect(),
@@ -74,10 +74,14 @@ class QueryBuilder {
     return { select, selectDistinct };
   }
   select(fields) {
-    return new import_select.SQLiteSelectBuilder({ fields: fields ?? void 0, session: void 0, dialect: this.getDialect() });
+    return new import_select.SingleStoreSelectBuilder({
+      fields: fields ?? void 0,
+      session: void 0,
+      dialect: this.getDialect()
+    });
   }
   selectDistinct(fields) {
-    return new import_select.SQLiteSelectBuilder({
+    return new import_select.SingleStoreSelectBuilder({
       fields: fields ?? void 0,
       session: void 0,
       dialect: this.getDialect(),
@@ -87,7 +91,7 @@ class QueryBuilder {
   // Lazy load dialect to avoid circular dependency
   getDialect() {
     if (!this.dialect) {
-      this.dialect = new import_dialect.SQLiteSyncDialect(this.dialectConfig);
+      this.dialect = new import_dialect.SingleStoreDialect(this.dialectConfig);
     }
     return this.dialect;
   }

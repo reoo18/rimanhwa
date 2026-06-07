@@ -18,17 +18,15 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var delete_exports = {};
 __export(delete_exports, {
-  SQLiteDeleteBase: () => SQLiteDeleteBase
+  SingleStoreDeleteBase: () => SingleStoreDeleteBase
 });
 module.exports = __toCommonJS(delete_exports);
 var import_entity = require("../../entity.cjs");
 var import_query_promise = require("../../query-promise.cjs");
 var import_selection_proxy = require("../../selection-proxy.cjs");
-var import_table = require("../table.cjs");
-var import_table2 = require("../../table.cjs");
-var import_utils = require("../../utils.cjs");
-var import_utils2 = require("../utils.cjs");
-class SQLiteDeleteBase extends import_query_promise.QueryPromise {
+var import_table = require("../../table.cjs");
+var import_utils = require("../utils.cjs");
+class SingleStoreDeleteBase extends import_query_promise.QueryPromise {
   constructor(table, session, dialect, withList) {
     super();
     this.table = table;
@@ -36,8 +34,7 @@ class SQLiteDeleteBase extends import_query_promise.QueryPromise {
     this.dialect = dialect;
     this.config = { table, withList };
   }
-  static [import_entity.entityKind] = "SQLiteDelete";
-  /** @internal */
+  static [import_entity.entityKind] = "SingleStoreDelete";
   config;
   /**
    * Adds a `where` clause to the query.
@@ -76,7 +73,7 @@ class SQLiteDeleteBase extends import_query_promise.QueryPromise {
     if (typeof columns[0] === "function") {
       const orderBy = columns[0](
         new Proxy(
-          this.config.table[import_table2.Table.Symbol.Columns],
+          this.config.table[import_table.Table.Symbol.Columns],
           new import_selection_proxy.SelectionProxyHandler({ sqlAliasedBehavior: "alias", sqlBehavior: "sql" })
         )
       );
@@ -92,10 +89,6 @@ class SQLiteDeleteBase extends import_query_promise.QueryPromise {
     this.config.limit = limit;
     return this;
   }
-  returning(fields = this.table[import_table.SQLiteTable.Symbol.Columns]) {
-    this.config.returning = (0, import_utils.orderSelectedFields)(fields);
-    return this;
-  }
   /** @internal */
   getSQL() {
     return this.dialect.buildDeleteQuery(this.config);
@@ -104,44 +97,35 @@ class SQLiteDeleteBase extends import_query_promise.QueryPromise {
     const { typings: _typings, ...rest } = this.dialect.sqlToQuery(this.getSQL());
     return rest;
   }
-  /** @internal */
-  _prepare(isOneTimeQuery = true) {
-    return this.session[isOneTimeQuery ? "prepareOneTimeQuery" : "prepareQuery"](
+  prepare() {
+    return this.session.prepareQuery(
       this.dialect.sqlToQuery(this.getSQL()),
       this.config.returning,
-      this.config.returning ? "all" : "run",
-      true,
+      void 0,
+      void 0,
       void 0,
       {
         type: "delete",
-        tables: (0, import_utils2.extractUsedTable)(this.config.table)
+        tables: (0, import_utils.extractUsedTable)(this.config.table)
       }
     );
   }
-  prepare() {
-    return this._prepare(false);
-  }
-  run = (placeholderValues) => {
-    return this._prepare().run(placeholderValues);
+  execute = (placeholderValues) => {
+    return this.prepare().execute(placeholderValues);
   };
-  all = (placeholderValues) => {
-    return this._prepare().all(placeholderValues);
+  createIterator = () => {
+    const self = this;
+    return async function* (placeholderValues) {
+      yield* self.prepare().iterator(placeholderValues);
+    };
   };
-  get = (placeholderValues) => {
-    return this._prepare().get(placeholderValues);
-  };
-  values = (placeholderValues) => {
-    return this._prepare().values(placeholderValues);
-  };
-  async execute(placeholderValues) {
-    return this._prepare().execute(placeholderValues);
-  }
+  iterator = this.createIterator();
   $dynamic() {
     return this;
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SQLiteDeleteBase
+  SingleStoreDeleteBase
 });
 //# sourceMappingURL=delete.cjs.map

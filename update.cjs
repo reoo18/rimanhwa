@@ -18,30 +18,26 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var update_exports = {};
 __export(update_exports, {
-  SQLiteUpdateBase: () => SQLiteUpdateBase,
-  SQLiteUpdateBuilder: () => SQLiteUpdateBuilder
+  SingleStoreUpdateBase: () => SingleStoreUpdateBase,
+  SingleStoreUpdateBuilder: () => SingleStoreUpdateBuilder
 });
 module.exports = __toCommonJS(update_exports);
 var import_entity = require("../../entity.cjs");
 var import_query_promise = require("../../query-promise.cjs");
 var import_selection_proxy = require("../../selection-proxy.cjs");
-var import_table = require("../table.cjs");
-var import_subquery = require("../../subquery.cjs");
-var import_table2 = require("../../table.cjs");
+var import_table = require("../../table.cjs");
 var import_utils = require("../../utils.cjs");
-var import_view_common = require("../../view-common.cjs");
 var import_utils2 = require("../utils.cjs");
-var import_view_base = require("../view-base.cjs");
-class SQLiteUpdateBuilder {
+class SingleStoreUpdateBuilder {
   constructor(table, session, dialect, withList) {
     this.table = table;
     this.session = session;
     this.dialect = dialect;
     this.withList = withList;
   }
-  static [import_entity.entityKind] = "SQLiteUpdateBuilder";
+  static [import_entity.entityKind] = "SingleStoreUpdateBuilder";
   set(values) {
-    return new SQLiteUpdateBase(
+    return new SingleStoreUpdateBase(
       this.table,
       (0, import_utils.mapUpdateSet)(this.table, values),
       this.session,
@@ -50,47 +46,15 @@ class SQLiteUpdateBuilder {
     );
   }
 }
-class SQLiteUpdateBase extends import_query_promise.QueryPromise {
+class SingleStoreUpdateBase extends import_query_promise.QueryPromise {
   constructor(table, set, session, dialect, withList) {
     super();
     this.session = session;
     this.dialect = dialect;
-    this.config = { set, table, withList, joins: [] };
+    this.config = { set, table, withList };
   }
-  static [import_entity.entityKind] = "SQLiteUpdate";
-  /** @internal */
+  static [import_entity.entityKind] = "SingleStoreUpdate";
   config;
-  from(source) {
-    this.config.from = source;
-    return this;
-  }
-  createJoin(joinType) {
-    return (table, on) => {
-      const tableName = (0, import_utils.getTableLikeName)(table);
-      if (typeof tableName === "string" && this.config.joins.some((join) => join.alias === tableName)) {
-        throw new Error(`Alias "${tableName}" is already used in this query`);
-      }
-      if (typeof on === "function") {
-        const from = this.config.from ? (0, import_entity.is)(table, import_table.SQLiteTable) ? table[import_table2.Table.Symbol.Columns] : (0, import_entity.is)(table, import_subquery.Subquery) ? table._.selectedFields : (0, import_entity.is)(table, import_view_base.SQLiteViewBase) ? table[import_view_common.ViewBaseConfig].selectedFields : void 0 : void 0;
-        on = on(
-          new Proxy(
-            this.config.table[import_table2.Table.Symbol.Columns],
-            new import_selection_proxy.SelectionProxyHandler({ sqlAliasedBehavior: "sql", sqlBehavior: "sql" })
-          ),
-          from && new Proxy(
-            from,
-            new import_selection_proxy.SelectionProxyHandler({ sqlAliasedBehavior: "sql", sqlBehavior: "sql" })
-          )
-        );
-      }
-      this.config.joins.push({ on, table, joinType, alias: tableName });
-      return this;
-    };
-  }
-  leftJoin = this.createJoin("left");
-  rightJoin = this.createJoin("right");
-  innerJoin = this.createJoin("inner");
-  fullJoin = this.createJoin("full");
   /**
    * Adds a 'where' clause to the query.
    *
@@ -132,7 +96,7 @@ class SQLiteUpdateBase extends import_query_promise.QueryPromise {
     if (typeof columns[0] === "function") {
       const orderBy = columns[0](
         new Proxy(
-          this.config.table[import_table2.Table.Symbol.Columns],
+          this.config.table[import_table.Table.Symbol.Columns],
           new import_selection_proxy.SelectionProxyHandler({ sqlAliasedBehavior: "alias", sqlBehavior: "sql" })
         )
       );
@@ -148,10 +112,6 @@ class SQLiteUpdateBase extends import_query_promise.QueryPromise {
     this.config.limit = limit;
     return this;
   }
-  returning(fields = this.config.table[import_table.SQLiteTable.Symbol.Columns]) {
-    this.config.returning = (0, import_utils.orderSelectedFields)(fields);
-    return this;
-  }
   /** @internal */
   getSQL() {
     return this.dialect.buildUpdateQuery(this.config);
@@ -160,45 +120,36 @@ class SQLiteUpdateBase extends import_query_promise.QueryPromise {
     const { typings: _typings, ...rest } = this.dialect.sqlToQuery(this.getSQL());
     return rest;
   }
-  /** @internal */
-  _prepare(isOneTimeQuery = true) {
-    return this.session[isOneTimeQuery ? "prepareOneTimeQuery" : "prepareQuery"](
+  prepare() {
+    return this.session.prepareQuery(
       this.dialect.sqlToQuery(this.getSQL()),
       this.config.returning,
-      this.config.returning ? "all" : "run",
-      true,
+      void 0,
+      void 0,
       void 0,
       {
-        type: "insert",
+        type: "delete",
         tables: (0, import_utils2.extractUsedTable)(this.config.table)
       }
     );
   }
-  prepare() {
-    return this._prepare(false);
-  }
-  run = (placeholderValues) => {
-    return this._prepare().run(placeholderValues);
+  execute = (placeholderValues) => {
+    return this.prepare().execute(placeholderValues);
   };
-  all = (placeholderValues) => {
-    return this._prepare().all(placeholderValues);
+  createIterator = () => {
+    const self = this;
+    return async function* (placeholderValues) {
+      yield* self.prepare().iterator(placeholderValues);
+    };
   };
-  get = (placeholderValues) => {
-    return this._prepare().get(placeholderValues);
-  };
-  values = (placeholderValues) => {
-    return this._prepare().values(placeholderValues);
-  };
-  async execute() {
-    return this.config.returning ? this.all() : this.run();
-  }
+  iterator = this.createIterator();
   $dynamic() {
     return this;
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SQLiteUpdateBase,
-  SQLiteUpdateBuilder
+  SingleStoreUpdateBase,
+  SingleStoreUpdateBuilder
 });
 //# sourceMappingURL=update.cjs.map

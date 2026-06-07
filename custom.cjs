@@ -18,31 +18,31 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var custom_exports = {};
 __export(custom_exports, {
-  SQLiteCustomColumn: () => SQLiteCustomColumn,
-  SQLiteCustomColumnBuilder: () => SQLiteCustomColumnBuilder,
+  SingleStoreCustomColumn: () => SingleStoreCustomColumn,
+  SingleStoreCustomColumnBuilder: () => SingleStoreCustomColumnBuilder,
   customType: () => customType
 });
 module.exports = __toCommonJS(custom_exports);
 var import_entity = require("../../entity.cjs");
 var import_utils = require("../../utils.cjs");
 var import_common = require("./common.cjs");
-class SQLiteCustomColumnBuilder extends import_common.SQLiteColumnBuilder {
-  static [import_entity.entityKind] = "SQLiteCustomColumnBuilder";
+class SingleStoreCustomColumnBuilder extends import_common.SingleStoreColumnBuilder {
+  static [import_entity.entityKind] = "SingleStoreCustomColumnBuilder";
   constructor(name, fieldConfig, customTypeParams) {
-    super(name, "custom", "SQLiteCustomColumn");
+    super(name, "custom", "SingleStoreCustomColumn");
     this.config.fieldConfig = fieldConfig;
     this.config.customTypeParams = customTypeParams;
   }
   /** @internal */
   build(table) {
-    return new SQLiteCustomColumn(
+    return new SingleStoreCustomColumn(
       table,
       this.config
     );
   }
 }
-class SQLiteCustomColumn extends import_common.SQLiteColumn {
-  static [import_entity.entityKind] = "SQLiteCustomColumn";
+class SingleStoreCustomColumn extends import_common.SingleStoreColumn {
+  static [import_entity.entityKind] = "SingleStoreCustomColumn";
   sqlName;
   mapTo;
   mapFrom;
@@ -65,17 +65,13 @@ class SQLiteCustomColumn extends import_common.SQLiteColumn {
 function customType(customTypeParams) {
   return (a, b) => {
     const { name, config } = (0, import_utils.getColumnNameAndConfig)(a, b);
-    return new SQLiteCustomColumnBuilder(
-      name,
-      config,
-      customTypeParams
-    );
+    return new SingleStoreCustomColumnBuilder(name, config, customTypeParams);
   };
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SQLiteCustomColumn,
-  SQLiteCustomColumnBuilder,
+  SingleStoreCustomColumn,
+  SingleStoreCustomColumnBuilder,
   customType
 });
 //# sourceMappingURL=custom.cjs.map

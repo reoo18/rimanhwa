@@ -1,172 +1,106 @@
 import { entityKind } from "../../entity.js";
-import type { TypedQueryBuilder } from "../../query-builders/query-builder.js";
-import type { SelectResultFields } from "../../query-builders/select.types.js";
 import { QueryPromise } from "../../query-promise.js";
 import type { RunnableQuery } from "../../runnable-query.js";
+import type { SingleStoreDialect } from "../dialect.js";
+import type { AnySingleStoreQueryResultHKT, PreparedQueryHKTBase, PreparedQueryKind, SingleStorePreparedQueryConfig, SingleStoreQueryResultHKT, SingleStoreQueryResultKind, SingleStoreSession } from "../session.js";
+import type { SingleStoreTable } from "../table.js";
 import type { Placeholder, Query, SQLWrapper } from "../../sql/sql.js";
 import { Param, SQL } from "../../sql/sql.js";
-import type { SQLiteDialect } from "../dialect.js";
-import type { IndexColumn } from "../indexes.js";
-import type { SQLitePreparedQuery, SQLiteSession } from "../session.js";
-import { SQLiteTable } from "../table.js";
-import type { Subquery } from "../../subquery.js";
-import { type DrizzleTypeError, type Simplify } from "../../utils.js";
-import type { AnySQLiteColumn } from "../columns/common.js";
-import { QueryBuilder } from "./query-builder.js";
-import type { SelectedFieldsFlat, SelectedFieldsOrdered } from "./select.types.js";
-import type { SQLiteUpdateSetSource } from "./update.js";
-export interface SQLiteInsertConfig<TTable extends SQLiteTable = SQLiteTable> {
+import type { InferModelFromColumns } from "../../table.js";
+import type { AnySingleStoreColumn } from "../columns/common.js";
+import type { SelectedFieldsOrdered } from "./select.types.js";
+import type { SingleStoreUpdateSetSource } from "./update.js";
+export interface SingleStoreInsertConfig<TTable extends SingleStoreTable = SingleStoreTable> {
     table: TTable;
-    values: Record<string, Param | SQL>[] | SQLiteInsertSelectQueryBuilder<TTable> | SQL;
-    withList?: Subquery[];
-    onConflict?: SQL[];
+    values: Record<string, Param | SQL>[];
+    ignore: boolean;
+    onConflict?: SQL;
     returning?: SelectedFieldsOrdered;
-    select?: boolean;
 }
-export type SQLiteInsertValue<TTable extends SQLiteTable> = Simplify<{
+export type AnySingleStoreInsertConfig = SingleStoreInsertConfig<SingleStoreTable>;
+export type SingleStoreInsertValue<TTable extends SingleStoreTable> = {
     [Key in keyof TTable['$inferInsert']]: TTable['$inferInsert'][Key] | SQL | Placeholder;
-}>;
-export type SQLiteInsertSelectQueryBuilder<TTable extends SQLiteTable> = TypedQueryBuilder<{
-    [K in keyof TTable['$inferInsert']]: AnySQLiteColumn | SQL | SQL.Aliased | TTable['$inferInsert'][K];
-}>;
-export declare class SQLiteInsertBuilder<TTable extends SQLiteTable, TResultType extends 'sync' | 'async', TRunResult> {
-    protected table: TTable;
-    protected session: SQLiteSession<any, any, any, any>;
-    protected dialect: SQLiteDialect;
-    private withList?;
-    static readonly [entityKind]: string;
-    constructor(table: TTable, session: SQLiteSession<any, any, any, any>, dialect: SQLiteDialect, withList?: Subquery[] | undefined);
-    values(value: SQLiteInsertValue<TTable>): SQLiteInsertBase<TTable, TResultType, TRunResult>;
-    values(values: SQLiteInsertValue<TTable>[]): SQLiteInsertBase<TTable, TResultType, TRunResult>;
-    select(selectQuery: (qb: QueryBuilder) => SQLiteInsertSelectQueryBuilder<TTable>): SQLiteInsertBase<TTable, TResultType, TRunResult>;
-    select(selectQuery: (qb: QueryBuilder) => SQL): SQLiteInsertBase<TTable, TResultType, TRunResult>;
-    select(selectQuery: SQL): SQLiteInsertBase<TTable, TResultType, TRunResult>;
-    select(selectQuery: SQLiteInsertSelectQueryBuilder<TTable>): SQLiteInsertBase<TTable, TResultType, TRunResult>;
-}
-export type SQLiteInsertWithout<T extends AnySQLiteInsert, TDynamic extends boolean, K extends keyof T & string> = TDynamic extends true ? T : Omit<SQLiteInsertBase<T['_']['table'], T['_']['resultType'], T['_']['runResult'], T['_']['returning'], TDynamic, T['_']['excludedMethods'] | K>, T['_']['excludedMethods'] | K>;
-export type SQLiteInsertReturning<T extends AnySQLiteInsert, TDynamic extends boolean, TSelectedFields extends SelectedFieldsFlat> = SQLiteInsertWithout<SQLiteInsertBase<T['_']['table'], T['_']['resultType'], T['_']['runResult'], SelectResultFields<TSelectedFields>, TDynamic, T['_']['excludedMethods']>, TDynamic, 'returning'>;
-export type SQLiteInsertReturningAll<T extends AnySQLiteInsert, TDynamic extends boolean> = SQLiteInsertWithout<SQLiteInsertBase<T['_']['table'], T['_']['resultType'], T['_']['runResult'], T['_']['table']['$inferSelect'], TDynamic, T['_']['excludedMethods']>, TDynamic, 'returning'>;
-export type SQLiteInsertOnConflictDoUpdateConfig<T extends AnySQLiteInsert> = {
-    target: IndexColumn | IndexColumn[];
-    /** @deprecated - use either `targetWhere` or `setWhere` */
-    where?: SQL;
-    targetWhere?: SQL;
-    setWhere?: SQL;
-    set: SQLiteUpdateSetSource<T['_']['table']>;
-};
-export type SQLiteInsertDynamic<T extends AnySQLiteInsert> = SQLiteInsert<T['_']['table'], T['_']['resultType'], T['_']['runResult'], T['_']['returning']>;
-export type SQLiteInsertExecute<T extends AnySQLiteInsert> = T['_']['returning'] extends undefined ? T['_']['runResult'] : T['_']['returning'][];
-export type SQLiteInsertPrepare<T extends AnySQLiteInsert> = SQLitePreparedQuery<{
-    type: T['_']['resultType'];
-    run: T['_']['runResult'];
-    all: T['_']['returning'] extends undefined ? DrizzleTypeError<'.all() cannot be used without .returning()'> : T['_']['returning'][];
-    get: T['_']['returning'] extends undefined ? DrizzleTypeError<'.get() cannot be used without .returning()'> : T['_']['returning'];
-    values: T['_']['returning'] extends undefined ? DrizzleTypeError<'.values() cannot be used without .returning()'> : any[][];
-    execute: SQLiteInsertExecute<T>;
-}>;
-export type AnySQLiteInsert = SQLiteInsertBase<any, any, any, any, any, any>;
-export type SQLiteInsert<TTable extends SQLiteTable = SQLiteTable, TResultType extends 'sync' | 'async' = 'sync' | 'async', TRunResult = unknown, TReturning = any> = SQLiteInsertBase<TTable, TResultType, TRunResult, TReturning, true, never>;
-export interface SQLiteInsertBase<TTable extends SQLiteTable, TResultType extends 'sync' | 'async', TRunResult, TReturning = undefined, TDynamic extends boolean = false, TExcludedMethods extends string = never> extends SQLWrapper, QueryPromise<TReturning extends undefined ? TRunResult : TReturning[]>, RunnableQuery<TReturning extends undefined ? TRunResult : TReturning[], 'sqlite'> {
-    readonly _: {
-        readonly dialect: 'sqlite';
-        readonly table: TTable;
-        readonly resultType: TResultType;
-        readonly runResult: TRunResult;
-        readonly returning: TReturning;
-        readonly dynamic: TDynamic;
-        readonly excludedMethods: TExcludedMethods;
-        readonly result: TReturning extends undefined ? TRunResult : TReturning[];
-    };
-}
-export declare class SQLiteInsertBase<TTable extends SQLiteTable, TResultType extends 'sync' | 'async', TRunResult, TReturning = undefined, TDynamic extends boolean = false, TExcludedMethods extends string = never> extends QueryPromise<TReturning extends undefined ? TRunResult : TReturning[]> implements RunnableQuery<TReturning extends undefined ? TRunResult : TReturning[], 'sqlite'>, SQLWrapper {
+} & {};
+export declare class SingleStoreInsertBuilder<TTable extends SingleStoreTable, TQueryResult extends SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase> {
+    private table;
     private session;
     private dialect;
     static readonly [entityKind]: string;
-    constructor(table: TTable, values: SQLiteInsertConfig['values'], session: SQLiteSession<any, any, any, any>, dialect: SQLiteDialect, withList?: Subquery[], select?: boolean);
+    private shouldIgnore;
+    constructor(table: TTable, session: SingleStoreSession, dialect: SingleStoreDialect);
+    ignore(): this;
+    values(value: SingleStoreInsertValue<TTable>): SingleStoreInsertBase<TTable, TQueryResult, TPreparedQueryHKT>;
+    values(values: SingleStoreInsertValue<TTable>[]): SingleStoreInsertBase<TTable, TQueryResult, TPreparedQueryHKT>;
+}
+export type SingleStoreInsertWithout<T extends AnySingleStoreInsert, TDynamic extends boolean, K extends keyof T & string> = TDynamic extends true ? T : Omit<SingleStoreInsertBase<T['_']['table'], T['_']['queryResult'], T['_']['preparedQueryHKT'], T['_']['returning'], TDynamic, T['_']['excludedMethods'] | '$returning'>, T['_']['excludedMethods'] | K>;
+export type SingleStoreInsertDynamic<T extends AnySingleStoreInsert> = SingleStoreInsert<T['_']['table'], T['_']['queryResult'], T['_']['preparedQueryHKT'], T['_']['returning']>;
+export type SingleStoreInsertPrepare<T extends AnySingleStoreInsert, TReturning extends Record<string, unknown> | undefined = undefined> = PreparedQueryKind<T['_']['preparedQueryHKT'], SingleStorePreparedQueryConfig & {
+    execute: TReturning extends undefined ? SingleStoreQueryResultKind<T['_']['queryResult'], never> : TReturning[];
+    iterator: never;
+}, true>;
+export type SingleStoreInsertOnDuplicateKeyUpdateConfig<T extends AnySingleStoreInsert> = {
+    set: SingleStoreUpdateSetSource<T['_']['table']>;
+};
+export type SingleStoreInsert<TTable extends SingleStoreTable = SingleStoreTable, TQueryResult extends SingleStoreQueryResultHKT = AnySingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase = PreparedQueryHKTBase, TReturning extends Record<string, unknown> | undefined = Record<string, unknown> | undefined> = SingleStoreInsertBase<TTable, TQueryResult, TPreparedQueryHKT, TReturning, true, never>;
+export type SingleStoreInsertReturning<T extends AnySingleStoreInsert, TDynamic extends boolean> = SingleStoreInsertBase<T['_']['table'], T['_']['queryResult'], T['_']['preparedQueryHKT'], InferModelFromColumns<GetPrimarySerialOrDefaultKeys<T['_']['table']['_']['columns']>>, TDynamic, T['_']['excludedMethods'] | '$returning'>;
+export type AnySingleStoreInsert = SingleStoreInsertBase<any, any, any, any, any, any>;
+export interface SingleStoreInsertBase<TTable extends SingleStoreTable, TQueryResult extends SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase, TReturning extends Record<string, unknown> | undefined = undefined, TDynamic extends boolean = false, TExcludedMethods extends string = never> extends QueryPromise<TReturning extends undefined ? SingleStoreQueryResultKind<TQueryResult, never> : TReturning[]>, RunnableQuery<TReturning extends undefined ? SingleStoreQueryResultKind<TQueryResult, never> : TReturning[], 'singlestore'>, SQLWrapper {
+    readonly _: {
+        readonly dialect: 'singlestore';
+        readonly table: TTable;
+        readonly queryResult: TQueryResult;
+        readonly preparedQueryHKT: TPreparedQueryHKT;
+        readonly dynamic: TDynamic;
+        readonly excludedMethods: TExcludedMethods;
+        readonly returning: TReturning;
+        readonly result: TReturning extends undefined ? SingleStoreQueryResultKind<TQueryResult, never> : TReturning[];
+    };
+}
+export type PrimaryKeyKeys<T extends Record<string, AnySingleStoreColumn>> = {
+    [K in keyof T]: T[K]['_']['isPrimaryKey'] extends true ? T[K]['_']['isAutoincrement'] extends true ? K : T[K]['_']['hasRuntimeDefault'] extends true ? T[K]['_']['isPrimaryKey'] extends true ? K : never : never : T[K]['_']['hasRuntimeDefault'] extends true ? T[K]['_']['isPrimaryKey'] extends true ? K : never : never;
+}[keyof T];
+export type GetPrimarySerialOrDefaultKeys<T extends Record<string, AnySingleStoreColumn>> = {
+    [K in PrimaryKeyKeys<T>]: T[K];
+};
+export declare class SingleStoreInsertBase<TTable extends SingleStoreTable, TQueryResult extends SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase, TReturning extends Record<string, unknown> | undefined = undefined, TDynamic extends boolean = false, TExcludedMethods extends string = never> extends QueryPromise<TReturning extends undefined ? SingleStoreQueryResultKind<TQueryResult, never> : TReturning[]> implements RunnableQuery<TReturning extends undefined ? SingleStoreQueryResultKind<TQueryResult, never> : TReturning[], 'singlestore'>, SQLWrapper {
+    private session;
+    private dialect;
+    static readonly [entityKind]: string;
+    protected $table: TTable;
+    private config;
+    constructor(table: TTable, values: SingleStoreInsertConfig['values'], ignore: boolean, session: SingleStoreSession, dialect: SingleStoreDialect);
     /**
-     * Adds a `returning` clause to the query.
+     * Adds an `on duplicate key update` clause to the query.
      *
-     * Calling this method will return the specified fields of the inserted rows. If no fields are specified, all fields will be returned.
+     * Calling this method will update update the row if any unique index conflicts. MySQL will automatically determine the conflict target based on the primary key and unique indexes.
      *
-     * See docs: {@link https://orm.drizzle.team/docs/insert#insert-returning}
+     * See docs: {@link https://orm.drizzle.team/docs/insert#on-duplicate-key-update}
+     *
+     * @param config The `set` clause
      *
      * @example
      * ```ts
-     * // Insert one row and return all fields
-     * const insertedCar: Car[] = await db.insert(cars)
-     *   .values({ brand: 'BMW' })
-     *   .returning();
-     *
-     * // Insert one row and return only the id
-     * const insertedCarId: { id: number }[] = await db.insert(cars)
-     *   .values({ brand: 'BMW' })
-     *   .returning({ id: cars.id });
+     * await db.insert(cars)
+     *   .values({ id: 1, brand: 'BMW'})
+     *   .onDuplicateKeyUpdate({ set: { brand: 'Porsche' }});
      * ```
-     */
-    returning(): SQLiteInsertReturningAll<this, TDynamic>;
-    returning<TSelectedFields extends SelectedFieldsFlat>(fields: TSelectedFields): SQLiteInsertReturning<this, TDynamic, TSelectedFields>;
-    /**
-     * Adds an `on conflict do nothing` clause to the query.
      *
-     * Calling this method simply avoids inserting a row as its alternative action.
+     * While MySQL does not directly support doing nothing on conflict, you can perform a no-op by setting any column's value to itself and achieve the same effect:
      *
-     * See docs: {@link https://orm.drizzle.team/docs/insert#on-conflict-do-nothing}
-     *
-     * @param config The `target` and `where` clauses.
-     *
-     * @example
      * ```ts
-     * // Insert one row and cancel the insert if there's a conflict
-     * await db.insert(cars)
-     *   .values({ id: 1, brand: 'BMW' })
-     *   .onConflictDoNothing();
+     * import { sql } from 'drizzle-orm';
      *
-     * // Explicitly specify conflict target
      * await db.insert(cars)
      *   .values({ id: 1, brand: 'BMW' })
-     *   .onConflictDoNothing({ target: cars.id });
+     *   .onDuplicateKeyUpdate({ set: { id: sql`id` } });
      * ```
      */
-    onConflictDoNothing(config?: {
-        target?: IndexColumn | IndexColumn[];
-        where?: SQL;
-    }): this;
-    /**
-     * Adds an `on conflict do update` clause to the query.
-     *
-     * Calling this method will update the existing row that conflicts with the row proposed for insertion as its alternative action.
-     *
-     * See docs: {@link https://orm.drizzle.team/docs/insert#upserts-and-conflicts}
-     *
-     * @param config The `target`, `set` and `where` clauses.
-     *
-     * @example
-     * ```ts
-     * // Update the row if there's a conflict
-     * await db.insert(cars)
-     *   .values({ id: 1, brand: 'BMW' })
-     *   .onConflictDoUpdate({
-     *     target: cars.id,
-     *     set: { brand: 'Porsche' }
-     *   });
-     *
-     * // Upsert with 'where' clause
-     * await db.insert(cars)
-     *   .values({ id: 1, brand: 'BMW' })
-     *   .onConflictDoUpdate({
-     *     target: cars.id,
-     *     set: { brand: 'newBMW' },
-     *     where: sql`${cars.createdAt} > '2023-01-01'::date`,
-     *   });
-     * ```
-     */
-    onConflictDoUpdate(config: SQLiteInsertOnConflictDoUpdateConfig<this>): this;
+    onDuplicateKeyUpdate(config: SingleStoreInsertOnDuplicateKeyUpdateConfig<this>): SingleStoreInsertWithout<this, TDynamic, 'onDuplicateKeyUpdate'>;
+    $returningId(): SingleStoreInsertWithout<SingleStoreInsertReturning<this, TDynamic>, TDynamic, '$returningId'>;
     toSQL(): Query;
-    prepare(): SQLiteInsertPrepare<this>;
-    run: ReturnType<this['prepare']>['run'];
-    all: ReturnType<this['prepare']>['all'];
-    get: ReturnType<this['prepare']>['get'];
-    values: ReturnType<this['prepare']>['values'];
-    execute(): Promise<SQLiteInsertExecute<this>>;
-    $dynamic(): SQLiteInsertDynamic<this>;
+    prepare(): SingleStoreInsertPrepare<this, TReturning>;
+    execute: ReturnType<this['prepare']>['execute'];
+    private createIterator;
+    iterator: ReturnType<this["prepare"]>["iterator"];
+    $dynamic(): SingleStoreInsertDynamic<this>;
 }

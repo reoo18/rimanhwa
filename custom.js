@@ -1,23 +1,23 @@
 import { entityKind } from "../../entity.js";
 import { getColumnNameAndConfig } from "../../utils.js";
-import { SQLiteColumn, SQLiteColumnBuilder } from "./common.js";
-class SQLiteCustomColumnBuilder extends SQLiteColumnBuilder {
-  static [entityKind] = "SQLiteCustomColumnBuilder";
+import { SingleStoreColumn, SingleStoreColumnBuilder } from "./common.js";
+class SingleStoreCustomColumnBuilder extends SingleStoreColumnBuilder {
+  static [entityKind] = "SingleStoreCustomColumnBuilder";
   constructor(name, fieldConfig, customTypeParams) {
-    super(name, "custom", "SQLiteCustomColumn");
+    super(name, "custom", "SingleStoreCustomColumn");
     this.config.fieldConfig = fieldConfig;
     this.config.customTypeParams = customTypeParams;
   }
   /** @internal */
   build(table) {
-    return new SQLiteCustomColumn(
+    return new SingleStoreCustomColumn(
       table,
       this.config
     );
   }
 }
-class SQLiteCustomColumn extends SQLiteColumn {
-  static [entityKind] = "SQLiteCustomColumn";
+class SingleStoreCustomColumn extends SingleStoreColumn {
+  static [entityKind] = "SingleStoreCustomColumn";
   sqlName;
   mapTo;
   mapFrom;
@@ -40,16 +40,12 @@ class SQLiteCustomColumn extends SQLiteColumn {
 function customType(customTypeParams) {
   return (a, b) => {
     const { name, config } = getColumnNameAndConfig(a, b);
-    return new SQLiteCustomColumnBuilder(
-      name,
-      config,
-      customTypeParams
-    );
+    return new SingleStoreCustomColumnBuilder(name, config, customTypeParams);
   };
 }
 export {
-  SQLiteCustomColumn,
-  SQLiteCustomColumnBuilder,
+  SingleStoreCustomColumn,
+  SingleStoreCustomColumnBuilder,
   customType
 };
 //# sourceMappingURL=custom.js.map

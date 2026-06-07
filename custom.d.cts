@@ -1,42 +1,43 @@
 import type { ColumnBuilderBaseConfig } from "../../column-builder.cjs";
 import type { ColumnBaseConfig } from "../../column.cjs";
 import { entityKind } from "../../entity.cjs";
+import type { AnySingleStoreTable } from "../table.cjs";
 import type { SQL } from "../../sql/sql.cjs";
-import type { AnySQLiteTable } from "../table.cjs";
 import { type Equal } from "../../utils.cjs";
-import { SQLiteColumn, SQLiteColumnBuilder } from "./common.cjs";
+import { SingleStoreColumn, SingleStoreColumnBuilder } from "./common.cjs";
 export type ConvertCustomConfig<TName extends string, T extends Partial<CustomTypeValues>> = {
     name: TName;
     dataType: 'custom';
-    columnType: 'SQLiteCustomColumn';
+    columnType: 'SingleStoreCustomColumn';
     data: T['data'];
     driverParam: T['driverData'];
     enumValues: undefined;
+    generated: undefined;
 } & (T['notNull'] extends true ? {
     notNull: true;
 } : {}) & (T['default'] extends true ? {
     hasDefault: true;
 } : {});
-export interface SQLiteCustomColumnInnerConfig {
+export interface SingleStoreCustomColumnInnerConfig {
     customTypeValues: CustomTypeValues;
 }
-export declare class SQLiteCustomColumnBuilder<T extends ColumnBuilderBaseConfig<'custom', 'SQLiteCustomColumn'>> extends SQLiteColumnBuilder<T, {
+export declare class SingleStoreCustomColumnBuilder<T extends ColumnBuilderBaseConfig<'custom', 'SingleStoreCustomColumn'>> extends SingleStoreColumnBuilder<T, {
     fieldConfig: CustomTypeValues['config'];
     customTypeParams: CustomTypeParams<any>;
 }, {
-    sqliteColumnBuilderBrand: 'SQLiteCustomColumnBuilderBrand';
+    singlestoreColumnBuilderBrand: 'SingleStoreCustomColumnBuilderBrand';
 }> {
     static readonly [entityKind]: string;
     constructor(name: T['name'], fieldConfig: CustomTypeValues['config'], customTypeParams: CustomTypeParams<any>);
 }
-export declare class SQLiteCustomColumn<T extends ColumnBaseConfig<'custom', 'SQLiteCustomColumn'>> extends SQLiteColumn<T> {
+export declare class SingleStoreCustomColumn<T extends ColumnBaseConfig<'custom', 'SingleStoreCustomColumn'>> extends SingleStoreColumn<T> {
     static readonly [entityKind]: string;
     private sqlName;
     private mapTo?;
     private mapFrom?;
-    constructor(table: AnySQLiteTable<{
+    constructor(table: AnySingleStoreTable<{
         name: T['tableName'];
-    }>, config: SQLiteCustomColumnBuilder<T>['config']);
+    }>, config: SingleStoreCustomColumnBuilder<T>['config']);
     getSQLType(): string;
     mapFromDriverValue(value: T['driverParam']): T['data'];
     mapToDriverValue(value: T['data']): T['driverParam'];
@@ -143,13 +144,13 @@ export interface CustomTypeParams<T extends CustomTypeValues> {
     fromDriver?: (value: T['driverData']) => T['data'];
 }
 /**
- * Custom sqlite database data type generator
+ * Custom singlestore database data type generator
  */
 export declare function customType<T extends CustomTypeValues = CustomTypeValues>(customTypeParams: CustomTypeParams<T>): Equal<T['configRequired'], true> extends true ? {
-    <TConfig extends Record<string, any> & T['config']>(fieldConfig: TConfig): SQLiteCustomColumnBuilder<ConvertCustomConfig<'', T>>;
-    <TName extends string>(dbName: TName, fieldConfig: T['config']): SQLiteCustomColumnBuilder<ConvertCustomConfig<TName, T>>;
+    <TConfig extends Record<string, any> & T['config']>(fieldConfig: TConfig): SingleStoreCustomColumnBuilder<ConvertCustomConfig<'', T>>;
+    <TName extends string>(dbName: TName, fieldConfig: T['config']): SingleStoreCustomColumnBuilder<ConvertCustomConfig<TName, T>>;
 } : {
-    (): SQLiteCustomColumnBuilder<ConvertCustomConfig<'', T>>;
-    <TConfig extends Record<string, any> & T['config']>(fieldConfig?: TConfig): SQLiteCustomColumnBuilder<ConvertCustomConfig<'', T>>;
-    <TName extends string>(dbName: TName, fieldConfig?: T['config']): SQLiteCustomColumnBuilder<ConvertCustomConfig<TName, T>>;
+    (): SingleStoreCustomColumnBuilder<ConvertCustomConfig<'', T>>;
+    <TConfig extends Record<string, any> & T['config']>(fieldConfig?: TConfig): SingleStoreCustomColumnBuilder<ConvertCustomConfig<'', T>>;
+    <TName extends string>(dbName: TName, fieldConfig?: T['config']): SingleStoreCustomColumnBuilder<ConvertCustomConfig<TName, T>>;
 };

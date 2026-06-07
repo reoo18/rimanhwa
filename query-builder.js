@@ -1,15 +1,15 @@
 import { entityKind, is } from "../../entity.js";
 import { SelectionProxyHandler } from "../../selection-proxy.js";
-import { SQLiteDialect, SQLiteSyncDialect } from "../dialect.js";
+import { SingleStoreDialect } from "../dialect.js";
 import { WithSubquery } from "../../subquery.js";
-import { SQLiteSelectBuilder } from "./select.js";
+import { SingleStoreSelectBuilder } from "./select.js";
 class QueryBuilder {
-  static [entityKind] = "SQLiteQueryBuilder";
+  static [entityKind] = "SingleStoreQueryBuilder";
   dialect;
   dialectConfig;
   constructor(dialect) {
-    this.dialect = is(dialect, SQLiteDialect) ? dialect : void 0;
-    this.dialectConfig = is(dialect, SQLiteDialect) ? void 0 : dialect;
+    this.dialect = is(dialect, SingleStoreDialect) ? dialect : void 0;
+    this.dialectConfig = is(dialect, SingleStoreDialect) ? void 0 : dialect;
   }
   $with = (alias, selection) => {
     const queryBuilder = this;
@@ -32,7 +32,7 @@ class QueryBuilder {
   with(...queries) {
     const self = this;
     function select(fields) {
-      return new SQLiteSelectBuilder({
+      return new SingleStoreSelectBuilder({
         fields: fields ?? void 0,
         session: void 0,
         dialect: self.getDialect(),
@@ -40,7 +40,7 @@ class QueryBuilder {
       });
     }
     function selectDistinct(fields) {
-      return new SQLiteSelectBuilder({
+      return new SingleStoreSelectBuilder({
         fields: fields ?? void 0,
         session: void 0,
         dialect: self.getDialect(),
@@ -51,10 +51,14 @@ class QueryBuilder {
     return { select, selectDistinct };
   }
   select(fields) {
-    return new SQLiteSelectBuilder({ fields: fields ?? void 0, session: void 0, dialect: this.getDialect() });
+    return new SingleStoreSelectBuilder({
+      fields: fields ?? void 0,
+      session: void 0,
+      dialect: this.getDialect()
+    });
   }
   selectDistinct(fields) {
-    return new SQLiteSelectBuilder({
+    return new SingleStoreSelectBuilder({
       fields: fields ?? void 0,
       session: void 0,
       dialect: this.getDialect(),
@@ -64,7 +68,7 @@ class QueryBuilder {
   // Lazy load dialect to avoid circular dependency
   getDialect() {
     if (!this.dialect) {
-      this.dialect = new SQLiteSyncDialect(this.dialectConfig);
+      this.dialect = new SingleStoreDialect(this.dialectConfig);
     }
     return this.dialect;
   }

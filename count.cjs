@@ -18,30 +18,31 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var count_exports = {};
 __export(count_exports, {
-  SQLiteCountBuilder: () => SQLiteCountBuilder
+  SingleStoreCountBuilder: () => SingleStoreCountBuilder
 });
 module.exports = __toCommonJS(count_exports);
 var import_entity = require("../../entity.cjs");
 var import_sql = require("../../sql/sql.cjs");
-class SQLiteCountBuilder extends import_sql.SQL {
+class SingleStoreCountBuilder extends import_sql.SQL {
   constructor(params) {
-    super(SQLiteCountBuilder.buildEmbeddedCount(params.source, params.filters).queryChunks);
+    super(SingleStoreCountBuilder.buildEmbeddedCount(params.source, params.filters).queryChunks);
     this.params = params;
+    this.mapWith(Number);
     this.session = params.session;
-    this.sql = SQLiteCountBuilder.buildCount(
+    this.sql = SingleStoreCountBuilder.buildCount(
       params.source,
       params.filters
     );
   }
   sql;
-  static [import_entity.entityKind] = "SQLiteCountBuilderAsync";
-  [Symbol.toStringTag] = "SQLiteCountBuilderAsync";
+  static [import_entity.entityKind] = "SingleStoreCountBuilder";
+  [Symbol.toStringTag] = "SingleStoreCountBuilder";
   session;
   static buildEmbeddedCount(source, filters) {
     return import_sql.sql`(select count(*) from ${source}${import_sql.sql.raw(" where ").if(filters)}${filters})`;
   }
   static buildCount(source, filters) {
-    return import_sql.sql`select count(*) from ${source}${import_sql.sql.raw(" where ").if(filters)}${filters}`;
+    return import_sql.sql`select count(*) as count from ${source}${import_sql.sql.raw(" where ").if(filters)}${filters}`;
   }
   then(onfulfilled, onrejected) {
     return Promise.resolve(this.session.count(this.sql)).then(
@@ -67,6 +68,6 @@ class SQLiteCountBuilder extends import_sql.SQL {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SQLiteCountBuilder
+  SingleStoreCountBuilder
 });
 //# sourceMappingURL=count.cjs.map
