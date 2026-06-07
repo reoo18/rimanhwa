@@ -18,61 +18,55 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var vector_exports = {};
 __export(vector_exports, {
-  cosineDistance: () => cosineDistance,
-  hammingDistance: () => hammingDistance,
-  innerProduct: () => innerProduct,
-  jaccardDistance: () => jaccardDistance,
-  l1Distance: () => l1Distance,
-  l2Distance: () => l2Distance
+  SingleStoreVector: () => SingleStoreVector,
+  SingleStoreVectorBuilder: () => SingleStoreVectorBuilder,
+  vector: () => vector
 });
 module.exports = __toCommonJS(vector_exports);
-var import_sql = require("../sql.cjs");
-function toSql(value) {
-  return JSON.stringify(value);
-}
-function l2Distance(column, value) {
-  if (Array.isArray(value)) {
-    return import_sql.sql`${column} <-> ${toSql(value)}`;
+var import_entity = require("../../entity.cjs");
+var import_utils = require("../../utils.cjs");
+var import_common = require("./common.cjs");
+class SingleStoreVectorBuilder extends import_common.SingleStoreColumnBuilder {
+  static [import_entity.entityKind] = "SingleStoreVectorBuilder";
+  constructor(name, config) {
+    super(name, "array", "SingleStoreVector");
+    this.config.dimensions = config.dimensions;
+    this.config.elementType = config.elementType;
   }
-  return import_sql.sql`${column} <-> ${value}`;
-}
-function l1Distance(column, value) {
-  if (Array.isArray(value)) {
-    return import_sql.sql`${column} <+> ${toSql(value)}`;
+  /** @internal */
+  build(table) {
+    return new SingleStoreVector(
+      table,
+      this.config
+    );
   }
-  return import_sql.sql`${column} <+> ${value}`;
-}
-function innerProduct(column, value) {
-  if (Array.isArray(value)) {
-    return import_sql.sql`${column} <#> ${toSql(value)}`;
+  /** @internal */
+  generatedAlwaysAs(as, config) {
+    throw new Error("not implemented");
   }
-  return import_sql.sql`${column} <#> ${value}`;
 }
-function cosineDistance(column, value) {
-  if (Array.isArray(value)) {
-    return import_sql.sql`${column} <=> ${toSql(value)}`;
+class SingleStoreVector extends import_common.SingleStoreColumn {
+  static [import_entity.entityKind] = "SingleStoreVector";
+  dimensions = this.config.dimensions;
+  elementType = this.config.elementType;
+  getSQLType() {
+    return `vector(${this.dimensions}, ${this.elementType || "F32"})`;
   }
-  return import_sql.sql`${column} <=> ${value}`;
+  mapToDriverValue(value) {
+    return JSON.stringify(value);
+  }
+  mapFromDriverValue(value) {
+    return JSON.parse(value);
+  }
 }
-function hammingDistance(column, value) {
-  if (Array.isArray(value)) {
-    return import_sql.sql`${column} <~> ${toSql(value)}`;
-  }
-  return import_sql.sql`${column} <~> ${value}`;
-}
-function jaccardDistance(column, value) {
-  if (Array.isArray(value)) {
-    return import_sql.sql`${column} <%> ${toSql(value)}`;
-  }
-  return import_sql.sql`${column} <%> ${value}`;
+function vector(a, b) {
+  const { name, config } = (0, import_utils.getColumnNameAndConfig)(a, b);
+  return new SingleStoreVectorBuilder(name, config);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  cosineDistance,
-  hammingDistance,
-  innerProduct,
-  jaccardDistance,
-  l1Distance,
-  l2Distance
+  SingleStoreVector,
+  SingleStoreVectorBuilder,
+  vector
 });
 //# sourceMappingURL=vector.cjs.map

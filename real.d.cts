@@ -1,22 +1,30 @@
 import type { ColumnBuilderBaseConfig } from "../../column-builder.cjs";
 import type { ColumnBaseConfig } from "../../column.cjs";
 import { entityKind } from "../../entity.cjs";
-import { SQLiteColumn, SQLiteColumnBuilder } from "./common.cjs";
-export type SQLiteRealBuilderInitial<TName extends string> = SQLiteRealBuilder<{
+import { SingleStoreColumnBuilderWithAutoIncrement, SingleStoreColumnWithAutoIncrement } from "./common.cjs";
+export type SingleStoreRealBuilderInitial<TName extends string> = SingleStoreRealBuilder<{
     name: TName;
     dataType: 'number';
-    columnType: 'SQLiteReal';
+    columnType: 'SingleStoreReal';
     data: number;
-    driverParam: number;
+    driverParam: number | string;
     enumValues: undefined;
+    generated: undefined;
 }>;
-export declare class SQLiteRealBuilder<T extends ColumnBuilderBaseConfig<'number', 'SQLiteReal'>> extends SQLiteColumnBuilder<T> {
+export declare class SingleStoreRealBuilder<T extends ColumnBuilderBaseConfig<'number', 'SingleStoreReal'>> extends SingleStoreColumnBuilderWithAutoIncrement<T, SingleStoreRealConfig> {
     static readonly [entityKind]: string;
-    constructor(name: T['name']);
+    constructor(name: T['name'], config: SingleStoreRealConfig | undefined);
 }
-export declare class SQLiteReal<T extends ColumnBaseConfig<'number', 'SQLiteReal'>> extends SQLiteColumn<T> {
+export declare class SingleStoreReal<T extends ColumnBaseConfig<'number', 'SingleStoreReal'>> extends SingleStoreColumnWithAutoIncrement<T, SingleStoreRealConfig> {
     static readonly [entityKind]: string;
+    precision: number | undefined;
+    scale: number | undefined;
     getSQLType(): string;
 }
-export declare function real(): SQLiteRealBuilderInitial<''>;
-export declare function real<TName extends string>(name: TName): SQLiteRealBuilderInitial<TName>;
+export interface SingleStoreRealConfig {
+    precision?: number;
+    scale?: number;
+}
+export declare function real(): SingleStoreRealBuilderInitial<''>;
+export declare function real(config?: SingleStoreRealConfig): SingleStoreRealBuilderInitial<''>;
+export declare function real<TName extends string>(name: TName, config?: SingleStoreRealConfig): SingleStoreRealBuilderInitial<TName>;

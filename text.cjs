@@ -18,80 +18,63 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var text_exports = {};
 __export(text_exports, {
-  SQLiteText: () => SQLiteText,
-  SQLiteTextBuilder: () => SQLiteTextBuilder,
-  SQLiteTextJson: () => SQLiteTextJson,
-  SQLiteTextJsonBuilder: () => SQLiteTextJsonBuilder,
-  text: () => text
+  SingleStoreText: () => SingleStoreText,
+  SingleStoreTextBuilder: () => SingleStoreTextBuilder,
+  longtext: () => longtext,
+  mediumtext: () => mediumtext,
+  text: () => text,
+  tinytext: () => tinytext
 });
 module.exports = __toCommonJS(text_exports);
 var import_entity = require("../../entity.cjs");
 var import_utils = require("../../utils.cjs");
 var import_common = require("./common.cjs");
-class SQLiteTextBuilder extends import_common.SQLiteColumnBuilder {
-  static [import_entity.entityKind] = "SQLiteTextBuilder";
-  constructor(name, config) {
-    super(name, "string", "SQLiteText");
+class SingleStoreTextBuilder extends import_common.SingleStoreColumnBuilder {
+  static [import_entity.entityKind] = "SingleStoreTextBuilder";
+  constructor(name, textType, config) {
+    super(name, "string", "SingleStoreText");
+    this.config.textType = textType;
     this.config.enumValues = config.enum;
-    this.config.length = config.length;
   }
   /** @internal */
   build(table) {
-    return new SQLiteText(
+    return new SingleStoreText(
       table,
       this.config
     );
   }
 }
-class SQLiteText extends import_common.SQLiteColumn {
-  static [import_entity.entityKind] = "SQLiteText";
+class SingleStoreText extends import_common.SingleStoreColumn {
+  static [import_entity.entityKind] = "SingleStoreText";
+  textType = this.config.textType;
   enumValues = this.config.enumValues;
-  length = this.config.length;
-  constructor(table, config) {
-    super(table, config);
-  }
   getSQLType() {
-    return `text${this.config.length ? `(${this.config.length})` : ""}`;
-  }
-}
-class SQLiteTextJsonBuilder extends import_common.SQLiteColumnBuilder {
-  static [import_entity.entityKind] = "SQLiteTextJsonBuilder";
-  constructor(name) {
-    super(name, "json", "SQLiteTextJson");
-  }
-  /** @internal */
-  build(table) {
-    return new SQLiteTextJson(
-      table,
-      this.config
-    );
-  }
-}
-class SQLiteTextJson extends import_common.SQLiteColumn {
-  static [import_entity.entityKind] = "SQLiteTextJson";
-  getSQLType() {
-    return "text";
-  }
-  mapFromDriverValue(value) {
-    return JSON.parse(value);
-  }
-  mapToDriverValue(value) {
-    return JSON.stringify(value);
+    return this.textType;
   }
 }
 function text(a, b = {}) {
   const { name, config } = (0, import_utils.getColumnNameAndConfig)(a, b);
-  if (config.mode === "json") {
-    return new SQLiteTextJsonBuilder(name);
-  }
-  return new SQLiteTextBuilder(name, config);
+  return new SingleStoreTextBuilder(name, "text", config);
+}
+function tinytext(a, b = {}) {
+  const { name, config } = (0, import_utils.getColumnNameAndConfig)(a, b);
+  return new SingleStoreTextBuilder(name, "tinytext", config);
+}
+function mediumtext(a, b = {}) {
+  const { name, config } = (0, import_utils.getColumnNameAndConfig)(a, b);
+  return new SingleStoreTextBuilder(name, "mediumtext", config);
+}
+function longtext(a, b = {}) {
+  const { name, config } = (0, import_utils.getColumnNameAndConfig)(a, b);
+  return new SingleStoreTextBuilder(name, "longtext", config);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SQLiteText,
-  SQLiteTextBuilder,
-  SQLiteTextJson,
-  SQLiteTextJsonBuilder,
-  text
+  SingleStoreText,
+  SingleStoreTextBuilder,
+  longtext,
+  mediumtext,
+  text,
+  tinytext
 });
 //# sourceMappingURL=text.cjs.map

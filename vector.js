@@ -1,49 +1,46 @@
-import { sql } from "../sql.js";
-function toSql(value) {
-  return JSON.stringify(value);
-}
-function l2Distance(column, value) {
-  if (Array.isArray(value)) {
-    return sql`${column} <-> ${toSql(value)}`;
+import { entityKind } from "../../entity.js";
+import { getColumnNameAndConfig } from "../../utils.js";
+import { SingleStoreColumn, SingleStoreColumnBuilder } from "./common.js";
+class SingleStoreVectorBuilder extends SingleStoreColumnBuilder {
+  static [entityKind] = "SingleStoreVectorBuilder";
+  constructor(name, config) {
+    super(name, "array", "SingleStoreVector");
+    this.config.dimensions = config.dimensions;
+    this.config.elementType = config.elementType;
   }
-  return sql`${column} <-> ${value}`;
-}
-function l1Distance(column, value) {
-  if (Array.isArray(value)) {
-    return sql`${column} <+> ${toSql(value)}`;
+  /** @internal */
+  build(table) {
+    return new SingleStoreVector(
+      table,
+      this.config
+    );
   }
-  return sql`${column} <+> ${value}`;
-}
-function innerProduct(column, value) {
-  if (Array.isArray(value)) {
-    return sql`${column} <#> ${toSql(value)}`;
+  /** @internal */
+  generatedAlwaysAs(as, config) {
+    throw new Error("not implemented");
   }
-  return sql`${column} <#> ${value}`;
 }
-function cosineDistance(column, value) {
-  if (Array.isArray(value)) {
-    return sql`${column} <=> ${toSql(value)}`;
+class SingleStoreVector extends SingleStoreColumn {
+  static [entityKind] = "SingleStoreVector";
+  dimensions = this.config.dimensions;
+  elementType = this.config.elementType;
+  getSQLType() {
+    return `vector(${this.dimensions}, ${this.elementType || "F32"})`;
   }
-  return sql`${column} <=> ${value}`;
+  mapToDriverValue(value) {
+    return JSON.stringify(value);
+  }
+  mapFromDriverValue(value) {
+    return JSON.parse(value);
+  }
 }
-function hammingDistance(column, value) {
-  if (Array.isArray(value)) {
-    return sql`${column} <~> ${toSql(value)}`;
-  }
-  return sql`${column} <~> ${value}`;
-}
-function jaccardDistance(column, value) {
-  if (Array.isArray(value)) {
-    return sql`${column} <%> ${toSql(value)}`;
-  }
-  return sql`${column} <%> ${value}`;
+function vector(a, b) {
+  const { name, config } = getColumnNameAndConfig(a, b);
+  return new SingleStoreVectorBuilder(name, config);
 }
 export {
-  cosineDistance,
-  hammingDistance,
-  innerProduct,
-  jaccardDistance,
-  l1Distance,
-  l2Distance
+  SingleStoreVector,
+  SingleStoreVectorBuilder,
+  vector
 };
 //# sourceMappingURL=vector.js.map

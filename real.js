@@ -1,27 +1,42 @@
 import { entityKind } from "../../entity.js";
-import { SQLiteColumn, SQLiteColumnBuilder } from "./common.js";
-class SQLiteRealBuilder extends SQLiteColumnBuilder {
-  static [entityKind] = "SQLiteRealBuilder";
-  constructor(name) {
-    super(name, "number", "SQLiteReal");
+import { getColumnNameAndConfig } from "../../utils.js";
+import { SingleStoreColumnBuilderWithAutoIncrement, SingleStoreColumnWithAutoIncrement } from "./common.js";
+class SingleStoreRealBuilder extends SingleStoreColumnBuilderWithAutoIncrement {
+  static [entityKind] = "SingleStoreRealBuilder";
+  constructor(name, config) {
+    super(name, "number", "SingleStoreReal");
+    this.config.precision = config?.precision;
+    this.config.scale = config?.scale;
   }
   /** @internal */
   build(table) {
-    return new SQLiteReal(table, this.config);
+    return new SingleStoreReal(
+      table,
+      this.config
+    );
   }
 }
-class SQLiteReal extends SQLiteColumn {
-  static [entityKind] = "SQLiteReal";
+class SingleStoreReal extends SingleStoreColumnWithAutoIncrement {
+  static [entityKind] = "SingleStoreReal";
+  precision = this.config.precision;
+  scale = this.config.scale;
   getSQLType() {
-    return "real";
+    if (this.precision !== void 0 && this.scale !== void 0) {
+      return `real(${this.precision}, ${this.scale})`;
+    } else if (this.precision === void 0) {
+      return "real";
+    } else {
+      return `real(${this.precision})`;
+    }
   }
 }
-function real(name) {
-  return new SQLiteRealBuilder(name ?? "");
+function real(a, b = {}) {
+  const { name, config } = getColumnNameAndConfig(a, b);
+  return new SingleStoreRealBuilder(name, config);
 }
 export {
-  SQLiteReal,
-  SQLiteRealBuilder,
+  SingleStoreReal,
+  SingleStoreRealBuilder,
   real
 };
 //# sourceMappingURL=real.js.map

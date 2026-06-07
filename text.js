@@ -1,69 +1,51 @@
 import { entityKind } from "../../entity.js";
 import { getColumnNameAndConfig } from "../../utils.js";
-import { SQLiteColumn, SQLiteColumnBuilder } from "./common.js";
-class SQLiteTextBuilder extends SQLiteColumnBuilder {
-  static [entityKind] = "SQLiteTextBuilder";
-  constructor(name, config) {
-    super(name, "string", "SQLiteText");
+import { SingleStoreColumn, SingleStoreColumnBuilder } from "./common.js";
+class SingleStoreTextBuilder extends SingleStoreColumnBuilder {
+  static [entityKind] = "SingleStoreTextBuilder";
+  constructor(name, textType, config) {
+    super(name, "string", "SingleStoreText");
+    this.config.textType = textType;
     this.config.enumValues = config.enum;
-    this.config.length = config.length;
   }
   /** @internal */
   build(table) {
-    return new SQLiteText(
+    return new SingleStoreText(
       table,
       this.config
     );
   }
 }
-class SQLiteText extends SQLiteColumn {
-  static [entityKind] = "SQLiteText";
+class SingleStoreText extends SingleStoreColumn {
+  static [entityKind] = "SingleStoreText";
+  textType = this.config.textType;
   enumValues = this.config.enumValues;
-  length = this.config.length;
-  constructor(table, config) {
-    super(table, config);
-  }
   getSQLType() {
-    return `text${this.config.length ? `(${this.config.length})` : ""}`;
-  }
-}
-class SQLiteTextJsonBuilder extends SQLiteColumnBuilder {
-  static [entityKind] = "SQLiteTextJsonBuilder";
-  constructor(name) {
-    super(name, "json", "SQLiteTextJson");
-  }
-  /** @internal */
-  build(table) {
-    return new SQLiteTextJson(
-      table,
-      this.config
-    );
-  }
-}
-class SQLiteTextJson extends SQLiteColumn {
-  static [entityKind] = "SQLiteTextJson";
-  getSQLType() {
-    return "text";
-  }
-  mapFromDriverValue(value) {
-    return JSON.parse(value);
-  }
-  mapToDriverValue(value) {
-    return JSON.stringify(value);
+    return this.textType;
   }
 }
 function text(a, b = {}) {
   const { name, config } = getColumnNameAndConfig(a, b);
-  if (config.mode === "json") {
-    return new SQLiteTextJsonBuilder(name);
-  }
-  return new SQLiteTextBuilder(name, config);
+  return new SingleStoreTextBuilder(name, "text", config);
+}
+function tinytext(a, b = {}) {
+  const { name, config } = getColumnNameAndConfig(a, b);
+  return new SingleStoreTextBuilder(name, "tinytext", config);
+}
+function mediumtext(a, b = {}) {
+  const { name, config } = getColumnNameAndConfig(a, b);
+  return new SingleStoreTextBuilder(name, "mediumtext", config);
+}
+function longtext(a, b = {}) {
+  const { name, config } = getColumnNameAndConfig(a, b);
+  return new SingleStoreTextBuilder(name, "longtext", config);
 }
 export {
-  SQLiteText,
-  SQLiteTextBuilder,
-  SQLiteTextJson,
-  SQLiteTextJsonBuilder,
-  text
+  SingleStoreText,
+  SingleStoreTextBuilder,
+  longtext,
+  mediumtext,
+  text,
+  tinytext
 };
 //# sourceMappingURL=text.js.map

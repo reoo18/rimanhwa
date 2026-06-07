@@ -18,36 +18,51 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var real_exports = {};
 __export(real_exports, {
-  SQLiteReal: () => SQLiteReal,
-  SQLiteRealBuilder: () => SQLiteRealBuilder,
+  SingleStoreReal: () => SingleStoreReal,
+  SingleStoreRealBuilder: () => SingleStoreRealBuilder,
   real: () => real
 });
 module.exports = __toCommonJS(real_exports);
 var import_entity = require("../../entity.cjs");
+var import_utils = require("../../utils.cjs");
 var import_common = require("./common.cjs");
-class SQLiteRealBuilder extends import_common.SQLiteColumnBuilder {
-  static [import_entity.entityKind] = "SQLiteRealBuilder";
-  constructor(name) {
-    super(name, "number", "SQLiteReal");
+class SingleStoreRealBuilder extends import_common.SingleStoreColumnBuilderWithAutoIncrement {
+  static [import_entity.entityKind] = "SingleStoreRealBuilder";
+  constructor(name, config) {
+    super(name, "number", "SingleStoreReal");
+    this.config.precision = config?.precision;
+    this.config.scale = config?.scale;
   }
   /** @internal */
   build(table) {
-    return new SQLiteReal(table, this.config);
+    return new SingleStoreReal(
+      table,
+      this.config
+    );
   }
 }
-class SQLiteReal extends import_common.SQLiteColumn {
-  static [import_entity.entityKind] = "SQLiteReal";
+class SingleStoreReal extends import_common.SingleStoreColumnWithAutoIncrement {
+  static [import_entity.entityKind] = "SingleStoreReal";
+  precision = this.config.precision;
+  scale = this.config.scale;
   getSQLType() {
-    return "real";
+    if (this.precision !== void 0 && this.scale !== void 0) {
+      return `real(${this.precision}, ${this.scale})`;
+    } else if (this.precision === void 0) {
+      return "real";
+    } else {
+      return `real(${this.precision})`;
+    }
   }
 }
-function real(name) {
-  return new SQLiteRealBuilder(name ?? "");
+function real(a, b = {}) {
+  const { name, config } = (0, import_utils.getColumnNameAndConfig)(a, b);
+  return new SingleStoreRealBuilder(name, config);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SQLiteReal,
-  SQLiteRealBuilder,
+  SingleStoreReal,
+  SingleStoreRealBuilder,
   real
 });
 //# sourceMappingURL=real.cjs.map
