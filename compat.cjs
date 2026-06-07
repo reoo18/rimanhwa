@@ -1,4 +1,5 @@
 "use strict";
+// Zod 3 compat layer
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -23,10 +24,34 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.safeParseAsync = exports.safeParse = exports.parseAsync = exports.parse = void 0;
+exports.config = exports.$brand = exports.ZodIssueCode = void 0;
+exports.setErrorMap = setErrorMap;
+exports.getErrorMap = getErrorMap;
 const core = __importStar(require("../core/index.cjs"));
-const errors_js_1 = require("./errors.cjs");
-exports.parse = core._parse(errors_js_1.ZodRealError);
-exports.parseAsync = core._parseAsync(errors_js_1.ZodRealError);
-exports.safeParse = core._safeParse(errors_js_1.ZodRealError);
-exports.safeParseAsync = core._safeParseAsync(errors_js_1.ZodRealError);
+/** @deprecated Use the raw string literal codes instead, e.g. "invalid_type". */
+exports.ZodIssueCode = {
+    invalid_type: "invalid_type",
+    too_big: "too_big",
+    too_small: "too_small",
+    invalid_format: "invalid_format",
+    not_multiple_of: "not_multiple_of",
+    unrecognized_keys: "unrecognized_keys",
+    invalid_union: "invalid_union",
+    invalid_key: "invalid_key",
+    invalid_element: "invalid_element",
+    invalid_value: "invalid_value",
+    custom: "custom",
+};
+var index_js_1 = require("../core/index.cjs");
+Object.defineProperty(exports, "$brand", { enumerable: true, get: function () { return index_js_1.$brand; } });
+Object.defineProperty(exports, "config", { enumerable: true, get: function () { return index_js_1.config; } });
+/** @deprecated Use `z.config(params)` instead. */
+function setErrorMap(map) {
+    core.config({
+        customError: map,
+    });
+}
+/** @deprecated Use `z.config()` instead. */
+function getErrorMap() {
+    return core.config().customError;
+}
