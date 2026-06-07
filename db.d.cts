@@ -1,37 +1,31 @@
+import type { ResultSetHeader } from 'mysql2/promise';
 import type { Cache } from "../cache/core/cache.cjs";
 import { entityKind } from "../entity.cjs";
 import type { ExtractTablesWithRelations, RelationalSchemaConfig, TablesRelationalConfig } from "../relations.cjs";
+import type { SingleStoreDriverDatabase } from "../singlestore/driver.cjs";
 import { type SQL, type SQLWrapper } from "../sql/sql.cjs";
-import type { SQLiteAsyncDialect, SQLiteSyncDialect } from "./dialect.cjs";
-import { SQLiteDeleteBase, SQLiteInsertBuilder, SQLiteSelectBuilder, SQLiteUpdateBuilder } from "./query-builders/index.cjs";
-import type { DBResult, Result, SQLiteSession, SQLiteTransaction, SQLiteTransactionConfig } from "./session.cjs";
-import type { SQLiteTable } from "./table.cjs";
 import { WithSubquery } from "../subquery.cjs";
-import type { DrizzleTypeError } from "../utils.cjs";
-import { SQLiteCountBuilder } from "./query-builders/count.cjs";
-import { RelationalQueryBuilder } from "./query-builders/query.cjs";
+import type { SingleStoreDialect } from "./dialect.cjs";
+import { SingleStoreCountBuilder } from "./query-builders/count.cjs";
+import { SingleStoreDeleteBase, SingleStoreInsertBuilder, SingleStoreSelectBuilder, SingleStoreUpdateBuilder } from "./query-builders/index.cjs";
 import type { SelectedFields } from "./query-builders/select.types.cjs";
+import type { PreparedQueryHKTBase, SingleStoreQueryResultHKT, SingleStoreQueryResultKind, SingleStoreSession, SingleStoreTransaction, SingleStoreTransactionConfig } from "./session.cjs";
 import type { WithBuilder } from "./subquery.cjs";
-import type { SQLiteViewBase } from "./view-base.cjs";
-export declare class BaseSQLiteDatabase<TResultKind extends 'sync' | 'async', TRunResult, TFullSchema extends Record<string, unknown> = Record<string, never>, TSchema extends TablesRelationalConfig = ExtractTablesWithRelations<TFullSchema>> {
-    private resultKind;
+import type { SingleStoreTable } from "./table.cjs";
+export declare class SingleStoreDatabase<TQueryResult extends SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase, TFullSchema extends Record<string, unknown> = {}, TSchema extends TablesRelationalConfig = ExtractTablesWithRelations<TFullSchema>> {
     static readonly [entityKind]: string;
     readonly _: {
         readonly schema: TSchema | undefined;
         readonly fullSchema: TFullSchema;
         readonly tableNamesMap: Record<string, string>;
     };
-    query: TFullSchema extends Record<string, never> ? DrizzleTypeError<'Seems like the schema generic is missing - did you forget to add it to your DB type?'> : {
-        [K in keyof TSchema]: RelationalQueryBuilder<TResultKind, TFullSchema, TSchema, TSchema[K]>;
-    };
-    constructor(resultKind: TResultKind, 
+    /**@inrernal */
+    query: unknown;
+    constructor(
     /** @internal */
-    dialect: {
-        sync: SQLiteSyncDialect;
-        async: SQLiteAsyncDialect;
-    }[TResultKind], 
+    dialect: SingleStoreDialect, 
     /** @internal */
-    session: SQLiteSession<TResultKind, TRunResult, TFullSchema, TSchema>, schema: RelationalSchemaConfig<TSchema> | undefined);
+    session: SingleStoreSession<any, any, any, any>, schema: RelationalSchemaConfig<TSchema> | undefined);
     /**
      * Creates a subquery that defines a temporary named result set as a CTE.
      *
@@ -65,7 +59,8 @@ export declare class BaseSQLiteDatabase<TResultKind extends 'sync' | 'async', TR
      * ```
      */
     $with: WithBuilder;
-    $count(source: SQLiteTable | SQLiteViewBase | SQL | SQLWrapper, filters?: SQL<unknown>): SQLiteCountBuilder<SQLiteSession<TResultKind, TRunResult, TFullSchema, TSchema>>;
+    $count(source: SingleStoreTable | SQL | SQLWrapper, // SingleStoreViewBase |
+    filters?: SQL<unknown>): SingleStoreCountBuilder<SingleStoreSession<any, any, any, any>>;
     /**
      * Incorporates a previously defined CTE (using `$with`) into the main query.
      *
@@ -87,16 +82,15 @@ export declare class BaseSQLiteDatabase<TResultKind extends 'sync' | 'async', TR
      */
     with(...queries: WithSubquery[]): {
         select: {
-            (): SQLiteSelectBuilder<undefined, TResultKind, TRunResult>;
-            <TSelection extends SelectedFields>(fields: TSelection): SQLiteSelectBuilder<TSelection, TResultKind, TRunResult>;
+            (): SingleStoreSelectBuilder<undefined, TPreparedQueryHKT>;
+            <TSelection extends SelectedFields>(fields: TSelection): SingleStoreSelectBuilder<TSelection, TPreparedQueryHKT>;
         };
         selectDistinct: {
-            (): SQLiteSelectBuilder<undefined, TResultKind, TRunResult>;
-            <TSelection extends SelectedFields>(fields: TSelection): SQLiteSelectBuilder<TSelection, TResultKind, TRunResult>;
+            (): SingleStoreSelectBuilder<undefined, TPreparedQueryHKT>;
+            <TSelection extends SelectedFields>(fields: TSelection): SingleStoreSelectBuilder<TSelection, TPreparedQueryHKT>;
         };
-        update: <TTable extends SQLiteTable>(table: TTable) => SQLiteUpdateBuilder<TTable, TResultKind, TRunResult>;
-        insert: <TTable extends SQLiteTable>(into: TTable) => SQLiteInsertBuilder<TTable, TResultKind, TRunResult>;
-        delete: <TTable extends SQLiteTable>(from: TTable) => SQLiteDeleteBase<TTable, TResultKind, TRunResult>;
+        update: <TTable extends SingleStoreTable>(table: TTable) => SingleStoreUpdateBuilder<TTable, TQueryResult, TPreparedQueryHKT>;
+        delete: <TTable extends SingleStoreTable>(table: TTable) => SingleStoreDeleteBase<TTable, TQueryResult, TPreparedQueryHKT>;
     };
     /**
      * Creates a select query.
@@ -134,8 +128,8 @@ export declare class BaseSQLiteDatabase<TResultKind extends 'sync' | 'async', TR
      *   .from(cars);
      * ```
      */
-    select(): SQLiteSelectBuilder<undefined, TResultKind, TRunResult>;
-    select<TSelection extends SelectedFields>(fields: TSelection): SQLiteSelectBuilder<TSelection, TResultKind, TRunResult>;
+    select(): SingleStoreSelectBuilder<undefined, TPreparedQueryHKT>;
+    select<TSelection extends SelectedFields>(fields: TSelection): SingleStoreSelectBuilder<TSelection, TPreparedQueryHKT>;
     /**
      * Adds `distinct` expression to the select query.
      *
@@ -148,7 +142,6 @@ export declare class BaseSQLiteDatabase<TResultKind extends 'sync' | 'async', TR
      * @param fields The selection object.
      *
      * @example
-     *
      * ```ts
      * // Select all unique rows from the 'cars' table
      * await db.selectDistinct()
@@ -161,8 +154,8 @@ export declare class BaseSQLiteDatabase<TResultKind extends 'sync' | 'async', TR
      *   .orderBy(cars.brand);
      * ```
      */
-    selectDistinct(): SQLiteSelectBuilder<undefined, TResultKind, TRunResult>;
-    selectDistinct<TSelection extends SelectedFields>(fields: TSelection): SQLiteSelectBuilder<TSelection, TResultKind, TRunResult>;
+    selectDistinct(): SingleStoreSelectBuilder<undefined, TPreparedQueryHKT>;
+    selectDistinct<TSelection extends SelectedFields>(fields: TSelection): SingleStoreSelectBuilder<TSelection, TPreparedQueryHKT>;
     /**
      * Creates an update query.
      *
@@ -182,18 +175,9 @@ export declare class BaseSQLiteDatabase<TResultKind extends 'sync' | 'async', TR
      *
      * // Update rows with filters and conditions
      * await db.update(cars).set({ color: 'red' }).where(eq(cars.brand, 'BMW'));
-     *
-     * // Update with returning clause
-     * const updatedCar: Car[] = await db.update(cars)
-     *   .set({ color: 'red' })
-     *   .where(eq(cars.id, 1))
-     *   .returning();
      * ```
      */
-    update<TTable extends SQLiteTable>(table: TTable): SQLiteUpdateBuilder<TTable, TResultKind, TRunResult>;
-    $cache: {
-        invalidate: Cache['onMutate'];
-    };
+    update<TTable extends SingleStoreTable>(table: TTable): SingleStoreUpdateBuilder<TTable, TQueryResult, TPreparedQueryHKT>;
     /**
      * Creates an insert query.
      *
@@ -211,14 +195,9 @@ export declare class BaseSQLiteDatabase<TResultKind extends 'sync' | 'async', TR
      *
      * // Insert multiple rows
      * await db.insert(cars).values([{ brand: 'BMW' }, { brand: 'Porsche' }]);
-     *
-     * // Insert with returning clause
-     * const insertedCar: Car[] = await db.insert(cars)
-     *   .values({ brand: 'BMW' })
-     *   .returning();
      * ```
      */
-    insert<TTable extends SQLiteTable>(into: TTable): SQLiteInsertBuilder<TTable, TResultKind, TRunResult>;
+    insert<TTable extends SingleStoreTable>(table: TTable): SingleStoreInsertBuilder<TTable, TQueryResult, TPreparedQueryHKT>;
     /**
      * Creates a delete query.
      *
@@ -236,22 +215,19 @@ export declare class BaseSQLiteDatabase<TResultKind extends 'sync' | 'async', TR
      *
      * // Delete rows with filters and conditions
      * await db.delete(cars).where(eq(cars.color, 'green'));
-     *
-     * // Delete with returning clause
-     * const deletedCar: Car[] = await db.delete(cars)
-     *   .where(eq(cars.id, 1))
-     *   .returning();
      * ```
      */
-    delete<TTable extends SQLiteTable>(from: TTable): SQLiteDeleteBase<TTable, TResultKind, TRunResult>;
-    run(query: SQLWrapper | string): DBResult<TResultKind, TRunResult>;
-    all<T = unknown>(query: SQLWrapper | string): DBResult<TResultKind, T[]>;
-    get<T = unknown>(query: SQLWrapper | string): DBResult<TResultKind, T>;
-    values<T extends unknown[] = unknown[]>(query: SQLWrapper | string): DBResult<TResultKind, T[]>;
-    transaction<T>(transaction: (tx: SQLiteTransaction<TResultKind, TRunResult, TFullSchema, TSchema>) => Result<TResultKind, T>, config?: SQLiteTransactionConfig): Result<TResultKind, T>;
+    delete<TTable extends SingleStoreTable>(table: TTable): SingleStoreDeleteBase<TTable, TQueryResult, TPreparedQueryHKT>;
+    execute<T extends {
+        [column: string]: any;
+    } = ResultSetHeader>(query: SQLWrapper | string): Promise<SingleStoreQueryResultKind<TQueryResult, T>>;
+    $cache: {
+        invalidate: Cache['onMutate'];
+    };
+    transaction<T>(transaction: (tx: SingleStoreTransaction<TQueryResult, TPreparedQueryHKT, TFullSchema, TSchema>, config?: SingleStoreTransactionConfig) => Promise<T>, config?: SingleStoreTransactionConfig): Promise<T>;
 }
-export type SQLiteWithReplicas<Q> = Q & {
+export type SingleStoreWithReplicas<Q> = Q & {
     $primary: Q;
     $replicas: Q[];
 };
-export declare const withReplicas: <TResultKind extends "sync" | "async", TRunResult, TFullSchema extends Record<string, unknown>, TSchema extends TablesRelationalConfig, Q extends BaseSQLiteDatabase<TResultKind, TRunResult, TFullSchema, TSchema extends Record<string, unknown> ? ExtractTablesWithRelations<TFullSchema> : TSchema>>(primary: Q, replicas: [Q, ...Q[]], getReplica?: (replicas: Q[]) => Q) => SQLiteWithReplicas<Q>;
+export declare const withReplicas: <Q extends SingleStoreDriverDatabase>(primary: Q, replicas: [Q, ...Q[]], getReplica?: (replicas: Q[]) => Q) => SingleStoreWithReplicas<Q>;

@@ -18,9 +18,7 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var dialect_exports = {};
 __export(dialect_exports, {
-  SQLiteAsyncDialect: () => SQLiteAsyncDialect,
-  SQLiteDialect: () => SQLiteDialect,
-  SQLiteSyncDialect: () => SQLiteSyncDialect
+  SingleStoreDialect: () => SingleStoreDialect
 });
 module.exports = __toCommonJS(dialect_exports);
 var import_alias = require("../alias.cjs");
@@ -29,42 +27,70 @@ var import_column = require("../column.cjs");
 var import_entity = require("../entity.cjs");
 var import_errors = require("../errors.cjs");
 var import_relations = require("../relations.cjs");
-var import_sql = require("../sql/index.cjs");
-var import_sql2 = require("../sql/sql.cjs");
-var import_columns = require("./columns/index.cjs");
-var import_table = require("./table.cjs");
+var import_expressions = require("../sql/expressions/index.cjs");
+var import_sql = require("../sql/sql.cjs");
 var import_subquery = require("../subquery.cjs");
-var import_table2 = require("../table.cjs");
+var import_table = require("../table.cjs");
 var import_utils = require("../utils.cjs");
 var import_view_common = require("../view-common.cjs");
-var import_view_base = require("./view-base.cjs");
-class SQLiteDialect {
-  static [import_entity.entityKind] = "SQLiteDialect";
+var import_common = require("./columns/common.cjs");
+var import_table2 = require("./table.cjs");
+class SingleStoreDialect {
+  static [import_entity.entityKind] = "SingleStoreDialect";
   /** @internal */
   casing;
   constructor(config) {
     this.casing = new import_casing.CasingCache(config?.casing);
   }
+  async migrate(migrations, session, config) {
+    const migrationsTable = config.migrationsTable ?? "__drizzle_migrations";
+    const migrationTableCreate = import_sql.sql`
+			create table if not exists ${import_sql.sql.identifier(migrationsTable)} (
+				id serial primary key,
+				hash text not null,
+				created_at bigint
+			)
+		`;
+    await session.execute(migrationTableCreate);
+    const dbMigrations = await session.all(
+      import_sql.sql`select id, hash, created_at from ${import_sql.sql.identifier(migrationsTable)} order by created_at desc limit 1`
+    );
+    const lastDbMigration = dbMigrations[0];
+    await session.transaction(async (tx) => {
+      for (const migration of migrations) {
+        if (!lastDbMigration || Number(lastDbMigration.created_at) < migration.folderMillis) {
+          for (const stmt of migration.sql) {
+            await tx.execute(import_sql.sql.raw(stmt));
+          }
+          await tx.execute(
+            import_sql.sql`insert into ${import_sql.sql.identifier(
+              migrationsTable
+            )} (\`hash\`, \`created_at\`) values(${migration.hash}, ${migration.folderMillis})`
+          );
+        }
+      }
+    });
+  }
   escapeName(name) {
-    return `"${name.replace(/"/g, '""')}"`;
+    return `\`${name.replace(/`/g, "``")}\``;
   }
   escapeParam(_num) {
-    return "?";
+    return `?`;
   }
   escapeString(str) {
     return `'${str.replace(/'/g, "''")}'`;
   }
   buildWithCTE(queries) {
     if (!queries?.length) return void 0;
-    const withSqlChunks = [import_sql2.sql`with `];
+    const withSqlChunks = [import_sql.sql`with `];
     for (const [i, w] of queries.entries()) {
-      withSqlChunks.push(import_sql2.sql`${import_sql2.sql.identifier(w._.alias)} as (${w._.sql})`);
+      withSqlChunks.push(import_sql.sql`${import_sql.sql.identifier(w._.alias)} as (${w._.sql})`);
       if (i < queries.length - 1) {
-        withSqlChunks.push(import_sql2.sql`, `);
+        withSqlChunks.push(import_sql.sql`, `);
       }
     }
-    withSqlChunks.push(import_sql2.sql` `);
-    return import_sql2.sql.join(withSqlChunks);
+    withSqlChunks.push(import_sql.sql` `);
+    return import_sql.sql.join(withSqlChunks);
   }
   buildDeleteQuery({
     table,
@@ -75,26 +101,26 @@ class SQLiteDialect {
     orderBy
   }) {
     const withSql = this.buildWithCTE(withList);
-    const returningSql = returning ? import_sql2.sql` returning ${this.buildSelection(returning, { isSingleTable: true })}` : void 0;
-    const whereSql = where ? import_sql2.sql` where ${where}` : void 0;
+    const returningSql = returning ? import_sql.sql` returning ${this.buildSelection(returning, { isSingleTable: true })}` : void 0;
+    const whereSql = where ? import_sql.sql` where ${where}` : void 0;
     const orderBySql = this.buildOrderBy(orderBy);
     const limitSql = this.buildLimit(limit);
-    return import_sql2.sql`${withSql}delete from ${table}${whereSql}${returningSql}${orderBySql}${limitSql}`;
+    return import_sql.sql`${withSql}delete from ${table}${whereSql}${orderBySql}${limitSql}${returningSql}`;
   }
   buildUpdateSet(table, set) {
-    const tableColumns = table[import_table2.Table.Symbol.Columns];
+    const tableColumns = table[import_table.Table.Symbol.Columns];
     const columnNames = Object.keys(tableColumns).filter(
       (colName) => set[colName] !== void 0 || tableColumns[colName]?.onUpdateFn !== void 0
     );
     const setSize = columnNames.length;
-    return import_sql2.sql.join(
+    return import_sql.sql.join(
       columnNames.flatMap((colName, i) => {
         const col = tableColumns[colName];
         const onUpdateFnResult = col.onUpdateFn?.();
-        const value = set[colName] ?? ((0, import_entity.is)(onUpdateFnResult, import_sql2.SQL) ? onUpdateFnResult : import_sql2.sql.param(onUpdateFnResult, col));
-        const res = import_sql2.sql`${import_sql2.sql.identifier(this.casing.getColumnCasing(col))} = ${value}`;
+        const value = set[colName] ?? ((0, import_entity.is)(onUpdateFnResult, import_sql.SQL) ? onUpdateFnResult : import_sql.sql.param(onUpdateFnResult, col));
+        const res = import_sql.sql`${import_sql.sql.identifier(this.casing.getColumnCasing(col))} = ${value}`;
         if (i < setSize - 1) {
-          return [res, import_sql2.sql.raw(", ")];
+          return [res, import_sql.sql.raw(", ")];
         }
         return [res];
       })
@@ -106,20 +132,16 @@ class SQLiteDialect {
     where,
     returning,
     withList,
-    joins,
-    from,
     limit,
     orderBy
   }) {
     const withSql = this.buildWithCTE(withList);
     const setSql = this.buildUpdateSet(table, set);
-    const fromSql = from && import_sql2.sql.join([import_sql2.sql.raw(" from "), this.buildFromTable(from)]);
-    const joinsSql = this.buildJoins(joins);
-    const returningSql = returning ? import_sql2.sql` returning ${this.buildSelection(returning, { isSingleTable: true })}` : void 0;
-    const whereSql = where ? import_sql2.sql` where ${where}` : void 0;
+    const returningSql = returning ? import_sql.sql` returning ${this.buildSelection(returning, { isSingleTable: true })}` : void 0;
+    const whereSql = where ? import_sql.sql` where ${where}` : void 0;
     const orderBySql = this.buildOrderBy(orderBy);
     const limitSql = this.buildLimit(limit);
-    return import_sql2.sql`${withSql}update ${table} set ${setSql}${fromSql}${joinsSql}${whereSql}${returningSql}${orderBySql}${limitSql}`;
+    return import_sql.sql`${withSql}update ${table} set ${setSql}${whereSql}${orderBySql}${limitSql}${returningSql}`;
   }
   /**
    * Builds selection SQL with provided fields/expressions
@@ -136,16 +158,16 @@ class SQLiteDialect {
     const columnsLen = fields.length;
     const chunks = fields.flatMap(({ field }, i) => {
       const chunk = [];
-      if ((0, import_entity.is)(field, import_sql2.SQL.Aliased) && field.isSelectionField) {
-        chunk.push(import_sql2.sql.identifier(field.fieldAlias));
-      } else if ((0, import_entity.is)(field, import_sql2.SQL.Aliased) || (0, import_entity.is)(field, import_sql2.SQL)) {
-        const query = (0, import_entity.is)(field, import_sql2.SQL.Aliased) ? field.sql : field;
+      if ((0, import_entity.is)(field, import_sql.SQL.Aliased) && field.isSelectionField) {
+        chunk.push(import_sql.sql.identifier(field.fieldAlias));
+      } else if ((0, import_entity.is)(field, import_sql.SQL.Aliased) || (0, import_entity.is)(field, import_sql.SQL)) {
+        const query = (0, import_entity.is)(field, import_sql.SQL.Aliased) ? field.sql : field;
         if (isSingleTable) {
           chunk.push(
-            new import_sql2.SQL(
+            new import_sql.SQL(
               query.queryChunks.map((c) => {
-                if ((0, import_entity.is)(c, import_column.Column)) {
-                  return import_sql2.sql.identifier(this.casing.getColumnCasing(c));
+                if ((0, import_entity.is)(c, import_common.SingleStoreColumn)) {
+                  return import_sql.sql.identifier(this.casing.getColumnCasing(c));
                 }
                 return c;
               })
@@ -154,102 +176,38 @@ class SQLiteDialect {
         } else {
           chunk.push(query);
         }
-        if ((0, import_entity.is)(field, import_sql2.SQL.Aliased)) {
-          chunk.push(import_sql2.sql` as ${import_sql2.sql.identifier(field.fieldAlias)}`);
+        if ((0, import_entity.is)(field, import_sql.SQL.Aliased)) {
+          chunk.push(import_sql.sql` as ${import_sql.sql.identifier(field.fieldAlias)}`);
         }
       } else if ((0, import_entity.is)(field, import_column.Column)) {
-        const tableName = field.table[import_table2.Table.Symbol.Name];
-        if (field.columnType === "SQLiteNumericBigInt") {
-          if (isSingleTable) {
-            chunk.push(
-              import_sql2.sql`cast(${import_sql2.sql.identifier(this.casing.getColumnCasing(field))} as text)`
-            );
-          } else {
-            chunk.push(
-              import_sql2.sql`cast(${import_sql2.sql.identifier(tableName)}.${import_sql2.sql.identifier(this.casing.getColumnCasing(field))} as text)`
-            );
-          }
+        if (isSingleTable) {
+          chunk.push(import_sql.sql.identifier(this.casing.getColumnCasing(field)));
         } else {
-          if (isSingleTable) {
-            chunk.push(import_sql2.sql.identifier(this.casing.getColumnCasing(field)));
-          } else {
-            chunk.push(
-              import_sql2.sql`${import_sql2.sql.identifier(tableName)}.${import_sql2.sql.identifier(this.casing.getColumnCasing(field))}`
-            );
-          }
+          chunk.push(field);
         }
       } else if ((0, import_entity.is)(field, import_subquery.Subquery)) {
         const entries = Object.entries(field._.selectedFields);
         if (entries.length === 1) {
           const entry = entries[0][1];
-          const fieldDecoder = (0, import_entity.is)(entry, import_sql2.SQL) ? entry.decoder : (0, import_entity.is)(entry, import_column.Column) ? { mapFromDriverValue: (v) => entry.mapFromDriverValue(v) } : entry.sql.decoder;
-          if (fieldDecoder) field._.sql.decoder = fieldDecoder;
+          const fieldDecoder = (0, import_entity.is)(entry, import_sql.SQL) ? entry.decoder : (0, import_entity.is)(entry, import_column.Column) ? { mapFromDriverValue: (v) => entry.mapFromDriverValue(v) } : entry.sql.decoder;
+          if (fieldDecoder) {
+            field._.sql.decoder = fieldDecoder;
+          }
         }
         chunk.push(field);
       }
       if (i < columnsLen - 1) {
-        chunk.push(import_sql2.sql`, `);
+        chunk.push(import_sql.sql`, `);
       }
       return chunk;
     });
-    return import_sql2.sql.join(chunks);
-  }
-  buildJoins(joins) {
-    if (!joins || joins.length === 0) {
-      return void 0;
-    }
-    const joinsArray = [];
-    if (joins) {
-      for (const [index, joinMeta] of joins.entries()) {
-        if (index === 0) {
-          joinsArray.push(import_sql2.sql` `);
-        }
-        const table = joinMeta.table;
-        const onSql = joinMeta.on ? import_sql2.sql` on ${joinMeta.on}` : void 0;
-        if ((0, import_entity.is)(table, import_table.SQLiteTable)) {
-          const tableName = table[import_table.SQLiteTable.Symbol.Name];
-          const tableSchema = table[import_table.SQLiteTable.Symbol.Schema];
-          const origTableName = table[import_table.SQLiteTable.Symbol.OriginalName];
-          const alias = tableName === origTableName ? void 0 : joinMeta.alias;
-          joinsArray.push(
-            import_sql2.sql`${import_sql2.sql.raw(joinMeta.joinType)} join ${tableSchema ? import_sql2.sql`${import_sql2.sql.identifier(tableSchema)}.` : void 0}${import_sql2.sql.identifier(
-              origTableName
-            )}${alias && import_sql2.sql` ${import_sql2.sql.identifier(alias)}`}${onSql}`
-          );
-        } else {
-          joinsArray.push(
-            import_sql2.sql`${import_sql2.sql.raw(joinMeta.joinType)} join ${table}${onSql}`
-          );
-        }
-        if (index < joins.length - 1) {
-          joinsArray.push(import_sql2.sql` `);
-        }
-      }
-    }
-    return import_sql2.sql.join(joinsArray);
+    return import_sql.sql.join(chunks);
   }
   buildLimit(limit) {
-    return typeof limit === "object" || typeof limit === "number" && limit >= 0 ? import_sql2.sql` limit ${limit}` : void 0;
+    return typeof limit === "object" || typeof limit === "number" && limit >= 0 ? import_sql.sql` limit ${limit}` : void 0;
   }
   buildOrderBy(orderBy) {
-    const orderByList = [];
-    if (orderBy) {
-      for (const [index, orderByValue] of orderBy.entries()) {
-        orderByList.push(orderByValue);
-        if (index < orderBy.length - 1) {
-          orderByList.push(import_sql2.sql`, `);
-        }
-      }
-    }
-    return orderByList.length > 0 ? import_sql2.sql` order by ${import_sql2.sql.join(orderByList)}` : void 0;
-  }
-  buildFromTable(table) {
-    if ((0, import_entity.is)(table, import_table2.Table) && table[import_table2.Table.Symbol.IsAlias]) {
-      return import_sql2.sql`${import_sql2.sql`${import_sql2.sql.identifier(table[import_table2.Table.Symbol.Schema] ?? "")}.`.if(table[import_table2.Table.Symbol.Schema])}${import_sql2.sql.identifier(
-        table[import_table2.Table.Symbol.OriginalName]
-      )} ${import_sql2.sql.identifier(table[import_table2.Table.Symbol.Name])}`;
-    }
-    return table;
+    return orderBy && orderBy.length > 0 ? import_sql.sql` order by ${import_sql.sql.join(orderBy, import_sql.sql`, `)}` : void 0;
   }
   buildSelectQuery({
     withList,
@@ -263,15 +221,16 @@ class SQLiteDialect {
     groupBy,
     limit,
     offset,
+    lockingClause,
     distinct,
     setOperators
   }) {
     const fieldsList = fieldsFlat ?? (0, import_utils.orderSelectedFields)(fields);
     for (const f of fieldsList) {
-      if ((0, import_entity.is)(f.field, import_column.Column) && (0, import_table2.getTableName)(f.field.table) !== ((0, import_entity.is)(table, import_subquery.Subquery) ? table._.alias : (0, import_entity.is)(table, import_view_base.SQLiteViewBase) ? table[import_view_common.ViewBaseConfig].name : (0, import_entity.is)(table, import_sql2.SQL) ? void 0 : (0, import_table2.getTableName)(table)) && !((table2) => joins?.some(
-        ({ alias }) => alias === (table2[import_table2.Table.Symbol.IsAlias] ? (0, import_table2.getTableName)(table2) : table2[import_table2.Table.Symbol.BaseName])
+      if ((0, import_entity.is)(f.field, import_column.Column) && (0, import_table.getTableName)(f.field.table) !== ((0, import_entity.is)(table, import_subquery.Subquery) ? table._.alias : (0, import_entity.is)(table, import_sql.SQL) ? void 0 : (0, import_table.getTableName)(table)) && !((table2) => joins?.some(
+        ({ alias }) => alias === (table2[import_table.Table.Symbol.IsAlias] ? (0, import_table.getTableName)(table2) : table2[import_table.Table.Symbol.BaseName])
       ))(f.field.table)) {
-        const tableName = (0, import_table2.getTableName)(f.field.table);
+        const tableName = (0, import_table.getTableName)(f.field.table);
         throw new Error(
           `Your "${f.path.join(
             "->"
@@ -281,26 +240,69 @@ class SQLiteDialect {
     }
     const isSingleTable = !joins || joins.length === 0;
     const withSql = this.buildWithCTE(withList);
-    const distinctSql = distinct ? import_sql2.sql` distinct` : void 0;
+    const distinctSql = distinct ? import_sql.sql` distinct` : void 0;
     const selection = this.buildSelection(fieldsList, { isSingleTable });
-    const tableSql = this.buildFromTable(table);
-    const joinsSql = this.buildJoins(joins);
-    const whereSql = where ? import_sql2.sql` where ${where}` : void 0;
-    const havingSql = having ? import_sql2.sql` having ${having}` : void 0;
-    const groupByList = [];
-    if (groupBy) {
-      for (const [index, groupByValue] of groupBy.entries()) {
-        groupByList.push(groupByValue);
-        if (index < groupBy.length - 1) {
-          groupByList.push(import_sql2.sql`, `);
+    const tableSql = (() => {
+      if ((0, import_entity.is)(table, import_table.Table) && table[import_table.Table.Symbol.IsAlias]) {
+        return import_sql.sql`${import_sql.sql`${import_sql.sql.identifier(table[import_table.Table.Symbol.Schema] ?? "")}.`.if(table[import_table.Table.Symbol.Schema])}${import_sql.sql.identifier(
+          table[import_table.Table.Symbol.OriginalName]
+        )} ${import_sql.sql.identifier(table[import_table.Table.Symbol.Name])}`;
+      }
+      return table;
+    })();
+    const joinsArray = [];
+    if (joins) {
+      for (const [index, joinMeta] of joins.entries()) {
+        if (index === 0) {
+          joinsArray.push(import_sql.sql` `);
+        }
+        const table2 = joinMeta.table;
+        const lateralSql = joinMeta.lateral ? import_sql.sql` lateral` : void 0;
+        const onSql = joinMeta.on ? import_sql.sql` on ${joinMeta.on}` : void 0;
+        if ((0, import_entity.is)(table2, import_table2.SingleStoreTable)) {
+          const tableName = table2[import_table2.SingleStoreTable.Symbol.Name];
+          const tableSchema = table2[import_table2.SingleStoreTable.Symbol.Schema];
+          const origTableName = table2[import_table2.SingleStoreTable.Symbol.OriginalName];
+          const alias = tableName === origTableName ? void 0 : joinMeta.alias;
+          joinsArray.push(
+            import_sql.sql`${import_sql.sql.raw(joinMeta.joinType)} join${lateralSql} ${tableSchema ? import_sql.sql`${import_sql.sql.identifier(tableSchema)}.` : void 0}${import_sql.sql.identifier(origTableName)}${alias && import_sql.sql` ${import_sql.sql.identifier(alias)}`}${onSql}`
+          );
+        } else if ((0, import_entity.is)(table2, import_sql.View)) {
+          const viewName = table2[import_view_common.ViewBaseConfig].name;
+          const viewSchema = table2[import_view_common.ViewBaseConfig].schema;
+          const origViewName = table2[import_view_common.ViewBaseConfig].originalName;
+          const alias = viewName === origViewName ? void 0 : joinMeta.alias;
+          joinsArray.push(
+            import_sql.sql`${import_sql.sql.raw(joinMeta.joinType)} join${lateralSql} ${viewSchema ? import_sql.sql`${import_sql.sql.identifier(viewSchema)}.` : void 0}${import_sql.sql.identifier(origViewName)}${alias && import_sql.sql` ${import_sql.sql.identifier(alias)}`}${onSql}`
+          );
+        } else {
+          joinsArray.push(
+            import_sql.sql`${import_sql.sql.raw(joinMeta.joinType)} join${lateralSql} ${table2}${onSql}`
+          );
+        }
+        if (index < joins.length - 1) {
+          joinsArray.push(import_sql.sql` `);
         }
       }
     }
-    const groupBySql = groupByList.length > 0 ? import_sql2.sql` group by ${import_sql2.sql.join(groupByList)}` : void 0;
+    const joinsSql = import_sql.sql.join(joinsArray);
+    const whereSql = where ? import_sql.sql` where ${where}` : void 0;
+    const havingSql = having ? import_sql.sql` having ${having}` : void 0;
     const orderBySql = this.buildOrderBy(orderBy);
+    const groupBySql = groupBy && groupBy.length > 0 ? import_sql.sql` group by ${import_sql.sql.join(groupBy, import_sql.sql`, `)}` : void 0;
     const limitSql = this.buildLimit(limit);
-    const offsetSql = offset ? import_sql2.sql` offset ${offset}` : void 0;
-    const finalQuery = import_sql2.sql`${withSql}select${distinctSql} ${selection} from ${tableSql}${joinsSql}${whereSql}${groupBySql}${havingSql}${orderBySql}${limitSql}${offsetSql}`;
+    const offsetSql = offset ? import_sql.sql` offset ${offset}` : void 0;
+    let lockingClausesSql;
+    if (lockingClause) {
+      const { config, strength } = lockingClause;
+      lockingClausesSql = import_sql.sql` for ${import_sql.sql.raw(strength)}`;
+      if (config.noWait) {
+        lockingClausesSql.append(import_sql.sql` nowait`);
+      } else if (config.skipLocked) {
+        lockingClausesSql.append(import_sql.sql` skip locked`);
+      }
+    }
+    const finalQuery = import_sql.sql`${withSql}select${distinctSql} ${selection} from ${tableSql}${joinsSql}${whereSql}${groupBySql}${havingSql}${orderBySql}${limitSql}${offsetSql}${lockingClausesSql}`;
     if (setOperators.length > 0) {
       return this.buildSetOperations(finalQuery, setOperators);
     }
@@ -323,92 +325,88 @@ class SQLiteDialect {
     leftSelect,
     setOperator: { type, isAll, rightSelect, limit, orderBy, offset }
   }) {
-    const leftChunk = import_sql2.sql`${leftSelect.getSQL()} `;
-    const rightChunk = import_sql2.sql`${rightSelect.getSQL()}`;
+    const leftChunk = import_sql.sql`(${leftSelect.getSQL()}) `;
+    const rightChunk = import_sql.sql`(${rightSelect.getSQL()})`;
     let orderBySql;
     if (orderBy && orderBy.length > 0) {
       const orderByValues = [];
-      for (const singleOrderBy of orderBy) {
-        if ((0, import_entity.is)(singleOrderBy, import_columns.SQLiteColumn)) {
-          orderByValues.push(import_sql2.sql.identifier(singleOrderBy.name));
-        } else if ((0, import_entity.is)(singleOrderBy, import_sql2.SQL)) {
-          for (let i = 0; i < singleOrderBy.queryChunks.length; i++) {
-            const chunk = singleOrderBy.queryChunks[i];
-            if ((0, import_entity.is)(chunk, import_columns.SQLiteColumn)) {
-              singleOrderBy.queryChunks[i] = import_sql2.sql.identifier(
+      for (const orderByUnit of orderBy) {
+        if ((0, import_entity.is)(orderByUnit, import_common.SingleStoreColumn)) {
+          orderByValues.push(
+            import_sql.sql.identifier(this.casing.getColumnCasing(orderByUnit))
+          );
+        } else if ((0, import_entity.is)(orderByUnit, import_sql.SQL)) {
+          for (let i = 0; i < orderByUnit.queryChunks.length; i++) {
+            const chunk = orderByUnit.queryChunks[i];
+            if ((0, import_entity.is)(chunk, import_common.SingleStoreColumn)) {
+              orderByUnit.queryChunks[i] = import_sql.sql.identifier(
                 this.casing.getColumnCasing(chunk)
               );
             }
           }
-          orderByValues.push(import_sql2.sql`${singleOrderBy}`);
+          orderByValues.push(import_sql.sql`${orderByUnit}`);
         } else {
-          orderByValues.push(import_sql2.sql`${singleOrderBy}`);
+          orderByValues.push(import_sql.sql`${orderByUnit}`);
         }
       }
-      orderBySql = import_sql2.sql` order by ${import_sql2.sql.join(orderByValues, import_sql2.sql`, `)}`;
+      orderBySql = import_sql.sql` order by ${import_sql.sql.join(orderByValues, import_sql.sql`, `)} `;
     }
-    const limitSql = typeof limit === "object" || typeof limit === "number" && limit >= 0 ? import_sql2.sql` limit ${limit}` : void 0;
-    const operatorChunk = import_sql2.sql.raw(`${type} ${isAll ? "all " : ""}`);
-    const offsetSql = offset ? import_sql2.sql` offset ${offset}` : void 0;
-    return import_sql2.sql`${leftChunk}${operatorChunk}${rightChunk}${orderBySql}${limitSql}${offsetSql}`;
+    const limitSql = typeof limit === "object" || typeof limit === "number" && limit >= 0 ? import_sql.sql` limit ${limit}` : void 0;
+    const operatorChunk = import_sql.sql.raw(`${type} ${isAll ? "all " : ""}`);
+    const offsetSql = offset ? import_sql.sql` offset ${offset}` : void 0;
+    return import_sql.sql`${leftChunk}${operatorChunk}${rightChunk}${orderBySql}${limitSql}${offsetSql}`;
   }
   buildInsertQuery({
     table,
-    values: valuesOrSelect,
-    onConflict,
-    returning,
-    withList,
-    select
+    values,
+    ignore,
+    onConflict
   }) {
     const valuesSqlList = [];
-    const columns = table[import_table2.Table.Symbol.Columns];
-    const colEntries = Object.entries(columns).filter(
-      ([_, col]) => !col.shouldDisableInsert()
-    );
-    const insertOrder = colEntries.map(([, column]) => import_sql2.sql.identifier(this.casing.getColumnCasing(column)));
-    if (select) {
-      const select2 = valuesOrSelect;
-      if ((0, import_entity.is)(select2, import_sql2.SQL)) {
-        valuesSqlList.push(select2);
-      } else {
-        valuesSqlList.push(select2.getSQL());
-      }
-    } else {
-      const values = valuesOrSelect;
-      valuesSqlList.push(import_sql2.sql.raw("values "));
-      for (const [valueIndex, value] of values.entries()) {
-        const valueList = [];
-        for (const [fieldName, col] of colEntries) {
-          const colValue = value[fieldName];
-          if (colValue === void 0 || (0, import_entity.is)(colValue, import_sql2.Param) && colValue.value === void 0) {
-            let defaultValue;
-            if (col.default !== null && col.default !== void 0) {
-              defaultValue = (0, import_entity.is)(col.default, import_sql2.SQL) ? col.default : import_sql2.sql.param(col.default, col);
-            } else if (col.defaultFn !== void 0) {
-              const defaultFnResult = col.defaultFn();
-              defaultValue = (0, import_entity.is)(defaultFnResult, import_sql2.SQL) ? defaultFnResult : import_sql2.sql.param(defaultFnResult, col);
-            } else if (!col.default && col.onUpdateFn !== void 0) {
-              const onUpdateFnResult = col.onUpdateFn();
-              defaultValue = (0, import_entity.is)(onUpdateFnResult, import_sql2.SQL) ? onUpdateFnResult : import_sql2.sql.param(onUpdateFnResult, col);
-            } else {
-              defaultValue = import_sql2.sql`null`;
-            }
+    const columns = table[import_table.Table.Symbol.Columns];
+    const colEntries = Object.entries(
+      columns
+    ).filter(([_, col]) => !col.shouldDisableInsert());
+    const insertOrder = colEntries.map(([, column]) => import_sql.sql.identifier(this.casing.getColumnCasing(column)));
+    const generatedIdsResponse = [];
+    for (const [valueIndex, value] of values.entries()) {
+      const generatedIds = {};
+      const valueList = [];
+      for (const [fieldName, col] of colEntries) {
+        const colValue = value[fieldName];
+        if (colValue === void 0 || (0, import_entity.is)(colValue, import_sql.Param) && colValue.value === void 0) {
+          if (col.defaultFn !== void 0) {
+            const defaultFnResult = col.defaultFn();
+            generatedIds[fieldName] = defaultFnResult;
+            const defaultValue = (0, import_entity.is)(defaultFnResult, import_sql.SQL) ? defaultFnResult : import_sql.sql.param(defaultFnResult, col);
             valueList.push(defaultValue);
+          } else if (!col.default && col.onUpdateFn !== void 0) {
+            const onUpdateFnResult = col.onUpdateFn();
+            const newValue = (0, import_entity.is)(onUpdateFnResult, import_sql.SQL) ? onUpdateFnResult : import_sql.sql.param(onUpdateFnResult, col);
+            valueList.push(newValue);
           } else {
-            valueList.push(colValue);
+            valueList.push(import_sql.sql`default`);
           }
+        } else {
+          if (col.defaultFn && (0, import_entity.is)(colValue, import_sql.Param)) {
+            generatedIds[fieldName] = colValue.value;
+          }
+          valueList.push(colValue);
         }
-        valuesSqlList.push(valueList);
-        if (valueIndex < values.length - 1) {
-          valuesSqlList.push(import_sql2.sql`, `);
-        }
+      }
+      generatedIdsResponse.push(generatedIds);
+      valuesSqlList.push(valueList);
+      if (valueIndex < values.length - 1) {
+        valuesSqlList.push(import_sql.sql`, `);
       }
     }
-    const withSql = this.buildWithCTE(withList);
-    const valuesSql = import_sql2.sql.join(valuesSqlList);
-    const returningSql = returning ? import_sql2.sql` returning ${this.buildSelection(returning, { isSingleTable: true })}` : void 0;
-    const onConflictSql = onConflict?.length ? import_sql2.sql.join(onConflict) : void 0;
-    return import_sql2.sql`${withSql}insert into ${table} ${insertOrder} ${valuesSql}${onConflictSql}${returningSql}`;
+    const valuesSql = import_sql.sql.join(valuesSqlList);
+    const ignoreSql = ignore ? import_sql.sql` ignore` : void 0;
+    const onConflictSql = onConflict ? import_sql.sql` on duplicate key ${onConflict}` : void 0;
+    return {
+      sql: import_sql.sql`insert${ignoreSql} into ${table} ${insertOrder} values ${valuesSql}${onConflictSql}`,
+      generatedIds: generatedIdsResponse
+    };
   }
   sqlToQuery(sql2, invokeSource) {
     return sql2.toQuery({
@@ -431,7 +429,7 @@ class SQLiteDialect {
     joinOn
   }) {
     let selection = [];
-    let limit, offset, orderBy = [], where;
+    let limit, offset, orderBy, where;
     const joins = [];
     if (config === true) {
       const selectionEntries = Object.entries(tableConfig.columns);
@@ -493,7 +491,7 @@ class SQLiteDialect {
       }
       let extras;
       if (config.extras) {
-        extras = typeof config.extras === "function" ? config.extras(aliasedColumns, { sql: import_sql2.sql }) : config.extras;
+        extras = typeof config.extras === "function" ? config.extras(aliasedColumns, { sql: import_sql.sql }) : config.extras;
         for (const [tsKey, value] of Object.entries(extras)) {
           fieldsSelection.push({
             tsKey,
@@ -503,7 +501,7 @@ class SQLiteDialect {
       }
       for (const { tsKey, value } of fieldsSelection) {
         selection.push({
-          dbKey: (0, import_entity.is)(value, import_sql2.SQL.Aliased) ? value.fieldAlias : tableConfig.columns[tsKey].name,
+          dbKey: (0, import_entity.is)(value, import_sql.SQL.Aliased) ? value.fieldAlias : tableConfig.columns[tsKey].name,
           tsKey,
           field: (0, import_entity.is)(value, import_column.Column) ? (0, import_alias.aliasedTableColumn)(value, tableAlias) : value,
           relationTableTsKey: void 0,
@@ -517,7 +515,10 @@ class SQLiteDialect {
       }
       orderBy = orderByOrig.map((orderByValue) => {
         if ((0, import_entity.is)(orderByValue, import_column.Column)) {
-          return (0, import_alias.aliasedTableColumn)(orderByValue, tableAlias);
+          return (0, import_alias.aliasedTableColumn)(
+            orderByValue,
+            tableAlias
+          );
         }
         return (0, import_alias.mapColumnsInSQLToAlias)(orderByValue, tableAlias);
       });
@@ -533,12 +534,12 @@ class SQLiteDialect {
           tableNamesMap,
           relation
         );
-        const relationTableName = (0, import_table2.getTableUniqueName)(relation.referencedTable);
+        const relationTableName = (0, import_table.getTableUniqueName)(relation.referencedTable);
         const relationTableTsName = tableNamesMap[relationTableName];
         const relationTableAlias = `${tableAlias}_${selectedRelationTsKey}`;
-        const joinOn2 = (0, import_sql.and)(
+        const joinOn2 = (0, import_expressions.and)(
           ...normalizedRelation.fields.map(
-            (field2, i) => (0, import_sql.eq)(
+            (field2, i) => (0, import_expressions.eq)(
               (0, import_alias.aliasedTableColumn)(
                 normalizedRelation.references[i],
                 relationTableAlias
@@ -558,7 +559,16 @@ class SQLiteDialect {
           joinOn: joinOn2,
           nestedQueryRelation: relation
         });
-        const field = import_sql2.sql`(${builtRelation.sql})`.as(selectedRelationTsKey);
+        const field = import_sql.sql`${import_sql.sql.identifier(relationTableAlias)}.${import_sql.sql.identifier("data")}`.as(
+          selectedRelationTsKey
+        );
+        joins.push({
+          on: import_sql.sql`true`,
+          table: new import_subquery.Subquery(builtRelation.sql, {}, relationTableAlias),
+          alias: relationTableAlias,
+          joinType: "left",
+          lateral: true
+        });
         selection.push({
           dbKey: selectedRelationTsKey,
           tsKey: selectedRelationTsKey,
@@ -571,20 +581,20 @@ class SQLiteDialect {
     }
     if (selection.length === 0) {
       throw new import_errors.DrizzleError({
-        message: `No fields selected for table "${tableConfig.tsName}" ("${tableAlias}"). You need to have at least one item in "columns", "with" or "extras". If you need to select all columns, omit the "columns" key or set it to undefined.`
+        message: `No fields selected for table "${tableConfig.tsName}" ("${tableAlias}")`
       });
     }
     let result;
-    where = (0, import_sql.and)(joinOn, where);
+    where = (0, import_expressions.and)(joinOn, where);
     if (nestedQueryRelation) {
-      let field = import_sql2.sql`json_array(${import_sql2.sql.join(
+      let field = import_sql.sql`JSON_TO_ARRAY(${import_sql.sql.join(
         selection.map(
-          ({ field: field2 }) => (0, import_entity.is)(field2, import_columns.SQLiteColumn) ? import_sql2.sql.identifier(this.casing.getColumnCasing(field2)) : (0, import_entity.is)(field2, import_sql2.SQL.Aliased) ? field2.sql : field2
+          ({ field: field2, tsKey, isJson }) => isJson ? import_sql.sql`${import_sql.sql.identifier(`${tableAlias}_${tsKey}`)}.${import_sql.sql.identifier("data")}` : (0, import_entity.is)(field2, import_sql.SQL.Aliased) ? field2.sql : field2
         ),
-        import_sql2.sql`, `
+        import_sql.sql`, `
       )})`;
       if ((0, import_entity.is)(nestedQueryRelation, import_relations.Many)) {
-        field = import_sql2.sql`coalesce(json_group_array(${field}), json_array())`;
+        field = import_sql.sql`json_agg(${field})`;
       }
       const nestedSelection = [
         {
@@ -596,7 +606,7 @@ class SQLiteDialect {
           selection
         }
       ];
-      const needsSubquery = limit !== void 0 || offset !== void 0 || orderBy.length > 0;
+      const needsSubquery = limit !== void 0 || offset !== void 0 || (orderBy?.length ?? 0) > 0;
       if (needsSubquery) {
         result = this.buildSelectQuery({
           table: (0, import_alias.aliasedTable)(table, tableAlias),
@@ -604,13 +614,18 @@ class SQLiteDialect {
           fieldsFlat: [
             {
               path: [],
-              field: import_sql2.sql.raw("*")
-            }
+              field: import_sql.sql.raw("*")
+            },
+            ...((orderBy?.length ?? 0) > 0 ? [
+              {
+                path: [],
+                field: import_sql.sql`row_number() over (order by ${import_sql.sql.join(orderBy, import_sql.sql`, `)})`
+              }
+            ] : [])
           ],
           where,
           limit,
           offset,
-          orderBy,
           setOperators: []
         });
         where = void 0;
@@ -621,7 +636,7 @@ class SQLiteDialect {
         result = (0, import_alias.aliasedTable)(table, tableAlias);
       }
       result = this.buildSelectQuery({
-        table: (0, import_entity.is)(result, import_table.SQLiteTable) ? result : new import_subquery.Subquery(result, {}, tableAlias),
+        table: (0, import_entity.is)(result, import_table2.SingleStoreTable) ? result : new import_subquery.Subquery(result, {}, tableAlias),
         fields: {},
         fieldsFlat: nestedSelection.map(({ field: field2 }) => ({
           path: [],
@@ -657,79 +672,8 @@ class SQLiteDialect {
     };
   }
 }
-class SQLiteSyncDialect extends SQLiteDialect {
-  static [import_entity.entityKind] = "SQLiteSyncDialect";
-  migrate(migrations, session, config) {
-    const migrationsTable = config === void 0 ? "__drizzle_migrations" : typeof config === "string" ? "__drizzle_migrations" : config.migrationsTable ?? "__drizzle_migrations";
-    const migrationTableCreate = import_sql2.sql`
-			CREATE TABLE IF NOT EXISTS ${import_sql2.sql.identifier(migrationsTable)} (
-				id SERIAL PRIMARY KEY,
-				hash text NOT NULL,
-				created_at numeric
-			)
-		`;
-    session.run(migrationTableCreate);
-    const dbMigrations = session.values(
-      import_sql2.sql`SELECT id, hash, created_at FROM ${import_sql2.sql.identifier(migrationsTable)} ORDER BY created_at DESC LIMIT 1`
-    );
-    const lastDbMigration = dbMigrations[0] ?? void 0;
-    session.run(import_sql2.sql`BEGIN`);
-    try {
-      for (const migration of migrations) {
-        if (!lastDbMigration || Number(lastDbMigration[2]) < migration.folderMillis) {
-          for (const stmt of migration.sql) {
-            session.run(import_sql2.sql.raw(stmt));
-          }
-          session.run(
-            import_sql2.sql`INSERT INTO ${import_sql2.sql.identifier(
-              migrationsTable
-            )} ("hash", "created_at") VALUES(${migration.hash}, ${migration.folderMillis})`
-          );
-        }
-      }
-      session.run(import_sql2.sql`COMMIT`);
-    } catch (e) {
-      session.run(import_sql2.sql`ROLLBACK`);
-      throw e;
-    }
-  }
-}
-class SQLiteAsyncDialect extends SQLiteDialect {
-  static [import_entity.entityKind] = "SQLiteAsyncDialect";
-  async migrate(migrations, session, config) {
-    const migrationsTable = config === void 0 ? "__drizzle_migrations" : typeof config === "string" ? "__drizzle_migrations" : config.migrationsTable ?? "__drizzle_migrations";
-    const migrationTableCreate = import_sql2.sql`
-			CREATE TABLE IF NOT EXISTS ${import_sql2.sql.identifier(migrationsTable)} (
-				id SERIAL PRIMARY KEY,
-				hash text NOT NULL,
-				created_at numeric
-			)
-		`;
-    await session.run(migrationTableCreate);
-    const dbMigrations = await session.values(
-      import_sql2.sql`SELECT id, hash, created_at FROM ${import_sql2.sql.identifier(migrationsTable)} ORDER BY created_at DESC LIMIT 1`
-    );
-    const lastDbMigration = dbMigrations[0] ?? void 0;
-    await session.transaction(async (tx) => {
-      for (const migration of migrations) {
-        if (!lastDbMigration || Number(lastDbMigration[2]) < migration.folderMillis) {
-          for (const stmt of migration.sql) {
-            await tx.run(import_sql2.sql.raw(stmt));
-          }
-          await tx.run(
-            import_sql2.sql`INSERT INTO ${import_sql2.sql.identifier(
-              migrationsTable
-            )} ("hash", "created_at") VALUES(${migration.hash}, ${migration.folderMillis})`
-          );
-        }
-      }
-    });
-  }
-}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SQLiteAsyncDialect,
-  SQLiteDialect,
-  SQLiteSyncDialect
+  SingleStoreDialect
 });
 //# sourceMappingURL=dialect.cjs.map

@@ -3,9 +3,11 @@ import { entityKind } from "../entity.cjs";
 import type { TypedQueryBuilder } from "../query-builders/query-builder.cjs";
 import type { AddAliasToSelection } from "../query-builders/select.types.cjs";
 import type { ColumnsSelection, SQL } from "../sql/sql.cjs";
-import type { SQLiteColumnBuilderBase } from "./columns/common.cjs";
+import type { SingleStoreColumnBuilderBase } from "./columns/index.cjs";
 import { QueryBuilder } from "./query-builders/query-builder.cjs";
-import { SQLiteViewBase } from "./view-base.cjs";
+import type { SelectedFields } from "./query-builders/select.types.cjs";
+import { SingleStoreViewBase } from "./view-base.cjs";
+import { SingleStoreViewConfig } from "./view-common.cjs";
 export interface ViewBuilderConfig {
     algorithm?: 'undefined' | 'merge' | 'temptable';
     definer?: string;
@@ -17,42 +19,47 @@ export declare class ViewBuilderCore<TConfig extends {
     columns?: unknown;
 }> {
     protected name: TConfig['name'];
+    protected schema: string | undefined;
     static readonly [entityKind]: string;
     readonly _: {
         readonly name: TConfig['name'];
         readonly columns: TConfig['columns'];
     };
-    constructor(name: TConfig['name']);
+    constructor(name: TConfig['name'], schema: string | undefined);
     protected config: ViewBuilderConfig;
+    algorithm(algorithm: Exclude<ViewBuilderConfig['algorithm'], undefined>): this;
+    definer(definer: Exclude<ViewBuilderConfig['definer'], undefined>): this;
+    sqlSecurity(sqlSecurity: Exclude<ViewBuilderConfig['sqlSecurity'], undefined>): this;
+    withCheckOption(withCheckOption?: Exclude<ViewBuilderConfig['withCheckOption'], undefined>): this;
 }
 export declare class ViewBuilder<TName extends string = string> extends ViewBuilderCore<{
     name: TName;
 }> {
     static readonly [entityKind]: string;
-    as<TSelection extends ColumnsSelection>(qb: TypedQueryBuilder<TSelection> | ((qb: QueryBuilder) => TypedQueryBuilder<TSelection>)): SQLiteViewWithSelection<TName, false, AddAliasToSelection<TSelection, TName, 'sqlite'>>;
+    as<TSelectedFields extends SelectedFields>(qb: TypedQueryBuilder<TSelectedFields> | ((qb: QueryBuilder) => TypedQueryBuilder<TSelectedFields>)): SingleStoreViewWithSelection<TName, false, AddAliasToSelection<TSelectedFields, TName, 'singlestore'>>;
 }
-export declare class ManualViewBuilder<TName extends string = string, TColumns extends Record<string, SQLiteColumnBuilderBase> = Record<string, SQLiteColumnBuilderBase>> extends ViewBuilderCore<{
+export declare class ManualViewBuilder<TName extends string = string, TColumns extends Record<string, SingleStoreColumnBuilderBase> = Record<string, SingleStoreColumnBuilderBase>> extends ViewBuilderCore<{
     name: TName;
     columns: TColumns;
 }> {
     static readonly [entityKind]: string;
     private columns;
-    constructor(name: TName, columns: TColumns);
-    existing(): SQLiteViewWithSelection<TName, true, BuildColumns<TName, TColumns, 'sqlite'>>;
-    as(query: SQL): SQLiteViewWithSelection<TName, false, BuildColumns<TName, TColumns, 'sqlite'>>;
+    constructor(name: TName, columns: TColumns, schema: string | undefined);
+    existing(): SingleStoreViewWithSelection<TName, true, BuildColumns<TName, TColumns, 'singlestore'>>;
+    as(query: SQL): SingleStoreViewWithSelection<TName, false, BuildColumns<TName, TColumns, 'singlestore'>>;
 }
-export declare class SQLiteView<TName extends string = string, TExisting extends boolean = boolean, TSelection extends ColumnsSelection = ColumnsSelection> extends SQLiteViewBase<TName, TExisting, TSelection> {
+export declare class SingleStoreView<TName extends string = string, TExisting extends boolean = boolean, TSelectedFields extends ColumnsSelection = ColumnsSelection> extends SingleStoreViewBase<TName, TExisting, TSelectedFields> {
     static readonly [entityKind]: string;
-    constructor({ config }: {
+    protected $SingleStoreViewBrand: 'SingleStoreView';
+    [SingleStoreViewConfig]: ViewBuilderConfig | undefined;
+    constructor({ singlestoreConfig, config }: {
+        singlestoreConfig: ViewBuilderConfig | undefined;
         config: {
             name: TName;
             schema: string | undefined;
-            selectedFields: ColumnsSelection;
+            selectedFields: SelectedFields;
             query: SQL | undefined;
         };
     });
 }
-export type SQLiteViewWithSelection<TName extends string, TExisting extends boolean, TSelection extends ColumnsSelection> = SQLiteView<TName, TExisting, TSelection> & TSelection;
-export declare function sqliteView<TName extends string>(name: TName): ViewBuilder<TName>;
-export declare function sqliteView<TName extends string, TColumns extends Record<string, SQLiteColumnBuilderBase>>(name: TName, columns: TColumns): ManualViewBuilder<TName, TColumns>;
-export declare const view: typeof sqliteView;
+export type SingleStoreViewWithSelection<TName extends string, TExisting extends boolean, TSelectedFields extends ColumnsSelection> = SingleStoreView<TName, TExisting, TSelectedFields> & TSelectedFields;

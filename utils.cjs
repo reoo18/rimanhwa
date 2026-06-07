@@ -19,59 +19,19 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var utils_exports = {};
 __export(utils_exports, {
   extractUsedTable: () => extractUsedTable,
-  getTableConfig: () => getTableConfig,
-  getViewConfig: () => getViewConfig
+  getTableConfig: () => getTableConfig
 });
 module.exports = __toCommonJS(utils_exports);
 var import_entity = require("../entity.cjs");
 var import_sql = require("../sql/sql.cjs");
 var import_subquery = require("../subquery.cjs");
 var import_table = require("../table.cjs");
-var import_view_common = require("../view-common.cjs");
-var import_checks = require("./checks.cjs");
-var import_foreign_keys = require("./foreign-keys.cjs");
 var import_indexes = require("./indexes.cjs");
 var import_primary_keys = require("./primary-keys.cjs");
 var import_table2 = require("./table.cjs");
 var import_unique_constraint = require("./unique-constraint.cjs");
-function getTableConfig(table) {
-  const columns = Object.values(table[import_table2.SQLiteTable.Symbol.Columns]);
-  const indexes = [];
-  const checks = [];
-  const primaryKeys = [];
-  const uniqueConstraints = [];
-  const foreignKeys = Object.values(table[import_table2.SQLiteTable.Symbol.InlineForeignKeys]);
-  const name = table[import_table.Table.Symbol.Name];
-  const extraConfigBuilder = table[import_table2.SQLiteTable.Symbol.ExtraConfigBuilder];
-  if (extraConfigBuilder !== void 0) {
-    const extraConfig = extraConfigBuilder(table[import_table2.SQLiteTable.Symbol.Columns]);
-    const extraValues = Array.isArray(extraConfig) ? extraConfig.flat(1) : Object.values(extraConfig);
-    for (const builder of Object.values(extraValues)) {
-      if ((0, import_entity.is)(builder, import_indexes.IndexBuilder)) {
-        indexes.push(builder.build(table));
-      } else if ((0, import_entity.is)(builder, import_checks.CheckBuilder)) {
-        checks.push(builder.build(table));
-      } else if ((0, import_entity.is)(builder, import_unique_constraint.UniqueConstraintBuilder)) {
-        uniqueConstraints.push(builder.build(table));
-      } else if ((0, import_entity.is)(builder, import_primary_keys.PrimaryKeyBuilder)) {
-        primaryKeys.push(builder.build(table));
-      } else if ((0, import_entity.is)(builder, import_foreign_keys.ForeignKeyBuilder)) {
-        foreignKeys.push(builder.build(table));
-      }
-    }
-  }
-  return {
-    columns,
-    indexes,
-    foreignKeys,
-    checks,
-    primaryKeys,
-    uniqueConstraints,
-    name
-  };
-}
 function extractUsedTable(table) {
-  if ((0, import_entity.is)(table, import_table2.SQLiteTable)) {
+  if ((0, import_entity.is)(table, import_table2.SingleStoreTable)) {
     return [`${table[import_table.Table.Symbol.BaseName]}`];
   }
   if ((0, import_entity.is)(table, import_subquery.Subquery)) {
@@ -82,16 +42,41 @@ function extractUsedTable(table) {
   }
   return [];
 }
-function getViewConfig(view) {
+function getTableConfig(table) {
+  const columns = Object.values(table[import_table2.SingleStoreTable.Symbol.Columns]);
+  const indexes = [];
+  const primaryKeys = [];
+  const uniqueConstraints = [];
+  const name = table[import_table.Table.Symbol.Name];
+  const schema = table[import_table.Table.Symbol.Schema];
+  const baseName = table[import_table.Table.Symbol.BaseName];
+  const extraConfigBuilder = table[import_table2.SingleStoreTable.Symbol.ExtraConfigBuilder];
+  if (extraConfigBuilder !== void 0) {
+    const extraConfig = extraConfigBuilder(table[import_table2.SingleStoreTable.Symbol.Columns]);
+    const extraValues = Array.isArray(extraConfig) ? extraConfig.flat(1) : Object.values(extraConfig);
+    for (const builder of Object.values(extraValues)) {
+      if ((0, import_entity.is)(builder, import_indexes.IndexBuilder)) {
+        indexes.push(builder.build(table));
+      } else if ((0, import_entity.is)(builder, import_unique_constraint.UniqueConstraintBuilder)) {
+        uniqueConstraints.push(builder.build(table));
+      } else if ((0, import_entity.is)(builder, import_primary_keys.PrimaryKeyBuilder)) {
+        primaryKeys.push(builder.build(table));
+      }
+    }
+  }
   return {
-    ...view[import_view_common.ViewBaseConfig]
-    // ...view[SQLiteViewConfig],
+    columns,
+    indexes,
+    primaryKeys,
+    uniqueConstraints,
+    name,
+    schema,
+    baseName
   };
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   extractUsedTable,
-  getTableConfig,
-  getViewConfig
+  getTableConfig
 });
 //# sourceMappingURL=utils.cjs.map

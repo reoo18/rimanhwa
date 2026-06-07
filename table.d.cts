@@ -1,43 +1,48 @@
 import type { BuildColumns } from "../column-builder.cjs";
 import { entityKind } from "../entity.cjs";
 import { Table, type TableConfig as TableConfigBase, type UpdateTableConfig } from "../table.cjs";
-import type { CheckBuilder } from "./checks.cjs";
-import { type SQLiteColumnBuilders } from "./columns/all.cjs";
-import type { SQLiteColumn, SQLiteColumnBuilderBase } from "./columns/common.cjs";
-import type { ForeignKeyBuilder } from "./foreign-keys.cjs";
-import type { IndexBuilder } from "./indexes.cjs";
+import { type SingleStoreColumnBuilders } from "./columns/all.cjs";
+import type { SingleStoreColumn, SingleStoreColumnBuilderBase } from "./columns/common.cjs";
+import type { AnyIndexBuilder } from "./indexes.cjs";
 import type { PrimaryKeyBuilder } from "./primary-keys.cjs";
 import type { UniqueConstraintBuilder } from "./unique-constraint.cjs";
-export type SQLiteTableExtraConfigValue = IndexBuilder | CheckBuilder | ForeignKeyBuilder | PrimaryKeyBuilder | UniqueConstraintBuilder;
-export type SQLiteTableExtraConfig = Record<string, SQLiteTableExtraConfigValue>;
-export type TableConfig = TableConfigBase<SQLiteColumn<any>>;
-export declare class SQLiteTable<T extends TableConfig = TableConfig> extends Table<T> {
+export type SingleStoreTableExtraConfigValue = AnyIndexBuilder | PrimaryKeyBuilder | UniqueConstraintBuilder;
+export type SingleStoreTableExtraConfig = Record<string, SingleStoreTableExtraConfigValue>;
+export type TableConfig = TableConfigBase<SingleStoreColumn>;
+export declare class SingleStoreTable<T extends TableConfig = TableConfig> extends Table<T> {
     static readonly [entityKind]: string;
+    protected $columns: T['columns'];
 }
-export type AnySQLiteTable<TPartial extends Partial<TableConfig> = {}> = SQLiteTable<UpdateTableConfig<TableConfig, TPartial>>;
-export type SQLiteTableWithColumns<T extends TableConfig> = SQLiteTable<T> & {
+export type AnySingleStoreTable<TPartial extends Partial<TableConfig> = {}> = SingleStoreTable<UpdateTableConfig<TableConfig, TPartial>>;
+export type SingleStoreTableWithColumns<T extends TableConfig> = SingleStoreTable<T> & {
     [Key in keyof T['columns']]: T['columns'][Key];
 };
-export interface SQLiteTableFn<TSchema extends string | undefined = undefined> {
-    <TTableName extends string, TColumnsMap extends Record<string, SQLiteColumnBuilderBase>>(name: TTableName, columns: TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'sqlite'>) => SQLiteTableExtraConfigValue[]): SQLiteTableWithColumns<{
+export declare function singlestoreTableWithSchema<TTableName extends string, TSchemaName extends string | undefined, TColumnsMap extends Record<string, SingleStoreColumnBuilderBase>>(name: TTableName, columns: TColumnsMap | ((columnTypes: SingleStoreColumnBuilders) => TColumnsMap), extraConfig: ((self: BuildColumns<TTableName, TColumnsMap, 'singlestore'>) => SingleStoreTableExtraConfig | SingleStoreTableExtraConfigValue[]) | undefined, schema: TSchemaName, baseName?: TTableName): SingleStoreTableWithColumns<{
+    name: TTableName;
+    schema: TSchemaName;
+    columns: BuildColumns<TTableName, TColumnsMap, 'singlestore'>;
+    dialect: 'singlestore';
+}>;
+export interface SingleStoreTableFn<TSchemaName extends string | undefined = undefined> {
+    <TTableName extends string, TColumnsMap extends Record<string, SingleStoreColumnBuilderBase>>(name: TTableName, columns: TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'singlestore'>) => SingleStoreTableExtraConfigValue[]): SingleStoreTableWithColumns<{
         name: TTableName;
-        schema: TSchema;
-        columns: BuildColumns<TTableName, TColumnsMap, 'sqlite'>;
-        dialect: 'sqlite';
+        schema: TSchemaName;
+        columns: BuildColumns<TTableName, TColumnsMap, 'singlestore'>;
+        dialect: 'singlestore';
     }>;
-    <TTableName extends string, TColumnsMap extends Record<string, SQLiteColumnBuilderBase>>(name: TTableName, columns: (columnTypes: SQLiteColumnBuilders) => TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'sqlite'>) => SQLiteTableExtraConfigValue[]): SQLiteTableWithColumns<{
+    <TTableName extends string, TColumnsMap extends Record<string, SingleStoreColumnBuilderBase>>(name: TTableName, columns: (columnTypes: SingleStoreColumnBuilders) => TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'singlestore'>) => SingleStoreTableExtraConfigValue[]): SingleStoreTableWithColumns<{
         name: TTableName;
-        schema: TSchema;
-        columns: BuildColumns<TTableName, TColumnsMap, 'sqlite'>;
-        dialect: 'sqlite';
+        schema: TSchemaName;
+        columns: BuildColumns<TTableName, TColumnsMap, 'singlestore'>;
+        dialect: 'singlestore';
     }>;
     /**
-     * @deprecated The third parameter of sqliteTable is changing and will only accept an array instead of an object
+     * @deprecated The third parameter of singlestoreTable is changing and will only accept an array instead of an object
      *
      * @example
      * Deprecated version:
      * ```ts
-     * export const users = sqliteTable("users", {
+     * export const users = singlestoreTable("users", {
      * 	id: int(),
      * }, (t) => ({
      * 	idx: index('custom_name').on(t.id)
@@ -46,26 +51,26 @@ export interface SQLiteTableFn<TSchema extends string | undefined = undefined> {
      *
      * New API:
      * ```ts
-     * export const users = sqliteTable("users", {
+     * export const users = singlestoreTable("users", {
      * 	id: int(),
      * }, (t) => [
      * 	index('custom_name').on(t.id)
      * ]);
      * ```
      */
-    <TTableName extends string, TColumnsMap extends Record<string, SQLiteColumnBuilderBase>>(name: TTableName, columns: TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'sqlite'>) => SQLiteTableExtraConfig): SQLiteTableWithColumns<{
+    <TTableName extends string, TColumnsMap extends Record<string, SingleStoreColumnBuilderBase>>(name: TTableName, columns: TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'singlestore'>) => SingleStoreTableExtraConfig): SingleStoreTableWithColumns<{
         name: TTableName;
-        schema: TSchema;
-        columns: BuildColumns<TTableName, TColumnsMap, 'sqlite'>;
-        dialect: 'sqlite';
+        schema: TSchemaName;
+        columns: BuildColumns<TTableName, TColumnsMap, 'singlestore'>;
+        dialect: 'singlestore';
     }>;
     /**
-     * @deprecated The third parameter of sqliteTable is changing and will only accept an array instead of an object
+     * @deprecated The third parameter of singlestoreTable is changing and will only accept an array instead of an object
      *
      * @example
      * Deprecated version:
      * ```ts
-     * export const users = sqliteTable("users", {
+     * export const users = singlestoreTable("users", {
      * 	id: int(),
      * }, (t) => ({
      * 	idx: index('custom_name').on(t.id)
@@ -74,19 +79,19 @@ export interface SQLiteTableFn<TSchema extends string | undefined = undefined> {
      *
      * New API:
      * ```ts
-     * export const users = sqliteTable("users", {
+     * export const users = singlestoreTable("users", {
      * 	id: int(),
      * }, (t) => [
      * 	index('custom_name').on(t.id)
      * ]);
      * ```
      */
-    <TTableName extends string, TColumnsMap extends Record<string, SQLiteColumnBuilderBase>>(name: TTableName, columns: (columnTypes: SQLiteColumnBuilders) => TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'sqlite'>) => SQLiteTableExtraConfig): SQLiteTableWithColumns<{
+    <TTableName extends string, TColumnsMap extends Record<string, SingleStoreColumnBuilderBase>>(name: TTableName, columns: (columnTypes: SingleStoreColumnBuilders) => TColumnsMap, extraConfig?: (self: BuildColumns<TTableName, TColumnsMap, 'singlestore'>) => SingleStoreTableExtraConfig): SingleStoreTableWithColumns<{
         name: TTableName;
-        schema: TSchema;
-        columns: BuildColumns<TTableName, TColumnsMap, 'sqlite'>;
-        dialect: 'sqlite';
+        schema: TSchemaName;
+        columns: BuildColumns<TTableName, TColumnsMap, 'singlestore'>;
+        dialect: 'singlestore';
     }>;
 }
-export declare const sqliteTable: SQLiteTableFn;
-export declare function sqliteTableCreator(customizeTableName: (name: string) => string): SQLiteTableFn;
+export declare const singlestoreTable: SingleStoreTableFn;
+export declare function singlestoreTableCreator(customizeTableName: (name: string) => string): SingleStoreTableFn;

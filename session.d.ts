@@ -1,50 +1,78 @@
-import type { FieldPacket, ResultSetHeader } from 'mysql2/promise';
+import { type Cache } from "../cache/core/cache.js";
+import type { WithCacheConfig } from "../cache/core/types.js";
 import { entityKind } from "../entity.js";
-import type { Logger } from "../logger.js";
 import type { RelationalSchemaConfig, TablesRelationalConfig } from "../relations.js";
-import type { SingleStoreDialect } from "../singlestore-core/dialect.js";
-import { SingleStoreTransaction } from "../singlestore-core/index.js";
-import type { SelectedFieldsOrdered } from "../singlestore-core/query-builders/select.types.js";
-import type { PreparedQueryKind, SingleStorePreparedQueryConfig, SingleStorePreparedQueryHKT, SingleStoreQueryResultHKT, SingleStoreTransactionConfig } from "../singlestore-core/session.js";
-import { SingleStorePreparedQuery as PreparedQueryBase, SingleStoreSession } from "../singlestore-core/session.js";
-import type { Query, SQL } from "../sql/sql.js";
-import { type Assume } from "../utils.js";
-import type { RemoteCallback } from "./driver.js";
-export type SingleStoreRawQueryResult = [ResultSetHeader, FieldPacket[]];
-export interface SingleStoreRemoteSessionOptions {
-    logger?: Logger;
+import { type Query, type SQL } from "../sql/sql.js";
+import type { Assume, Equal } from "../utils.js";
+import { SingleStoreDatabase } from "./db.js";
+import type { SingleStoreDialect } from "./dialect.js";
+import type { SelectedFieldsOrdered } from "./query-builders/select.types.js";
+export interface SingleStoreQueryResultHKT {
+    readonly $brand: 'SingleStoreQueryResultHKT';
+    readonly row: unknown;
+    readonly type: unknown;
 }
-export declare class SingleStoreRemoteSession<TFullSchema extends Record<string, unknown>, TSchema extends TablesRelationalConfig> extends SingleStoreSession<SingleStoreRemoteQueryResultHKT, SingleStoreRemotePreparedQueryHKT, TFullSchema, TSchema> {
-    private client;
-    private schema;
+export interface AnySingleStoreQueryResultHKT extends SingleStoreQueryResultHKT {
+    readonly type: any;
+}
+export type SingleStoreQueryResultKind<TKind extends SingleStoreQueryResultHKT, TRow> = (TKind & {
+    readonly row: TRow;
+})['type'];
+export interface SingleStorePreparedQueryConfig {
+    execute: unknown;
+    iterator: unknown;
+}
+export interface SingleStorePreparedQueryHKT {
+    readonly $brand: 'SingleStorePreparedQueryHKT';
+    readonly config: unknown;
+    readonly type: unknown;
+}
+export type PreparedQueryKind<TKind extends SingleStorePreparedQueryHKT, TConfig extends SingleStorePreparedQueryConfig, TAssume extends boolean = false> = Equal<TAssume, true> extends true ? Assume<(TKind & {
+    readonly config: TConfig;
+})['type'], SingleStorePreparedQuery<TConfig>> : (TKind & {
+    readonly config: TConfig;
+})['type'];
+export declare abstract class SingleStorePreparedQuery<T extends SingleStorePreparedQueryConfig> {
+    private cache?;
+    private queryMetadata?;
+    private cacheConfig?;
     static readonly [entityKind]: string;
-    private logger;
-    constructor(client: RemoteCallback, dialect: SingleStoreDialect, schema: RelationalSchemaConfig<TSchema> | undefined, options: SingleStoreRemoteSessionOptions);
-    prepareQuery<T extends SingleStorePreparedQueryConfig>(query: Query, fields: SelectedFieldsOrdered | undefined, customResultMapper?: (rows: unknown[][]) => T['execute'], generatedIds?: Record<string, unknown>[], returningIds?: SelectedFieldsOrdered): PreparedQueryKind<SingleStoreRemotePreparedQueryHKT, T>;
-    all<T = unknown>(query: SQL): Promise<T[]>;
-    transaction<T>(_transaction: (tx: SingleStoreProxyTransaction<TFullSchema, TSchema>) => Promise<T>, _config?: SingleStoreTransactionConfig): Promise<T>;
+    constructor(cache?: Cache | undefined, queryMetadata?: {
+        type: 'select' | 'update' | 'delete' | 'insert';
+        tables: string[];
+    } | undefined, cacheConfig?: WithCacheConfig | undefined);
+    abstract execute(placeholderValues?: Record<string, unknown>): Promise<T['execute']>;
+    abstract iterator(placeholderValues?: Record<string, unknown>): AsyncGenerator<T['iterator']>;
 }
-export declare class SingleStoreProxyTransaction<TFullSchema extends Record<string, unknown>, TSchema extends TablesRelationalConfig> extends SingleStoreTransaction<SingleStoreRemoteQueryResultHKT, SingleStoreRemotePreparedQueryHKT, TFullSchema, TSchema> {
+export interface SingleStoreTransactionConfig {
+    withConsistentSnapshot?: boolean;
+    accessMode?: 'read only' | 'read write';
+    isolationLevel: 'read committed';
+}
+export declare abstract class SingleStoreSession<TQueryResult extends SingleStoreQueryResultHKT = SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase = PreparedQueryHKTBase, TFullSchema extends Record<string, unknown> = Record<string, never>, TSchema extends TablesRelationalConfig = Record<string, never>> {
+    protected dialect: SingleStoreDialect;
     static readonly [entityKind]: string;
-    transaction<T>(_transaction: (tx: SingleStoreProxyTransaction<TFullSchema, TSchema>) => Promise<T>): Promise<T>;
+    constructor(dialect: SingleStoreDialect);
+    abstract prepareQuery<T extends SingleStorePreparedQueryConfig, TPreparedQueryHKT extends SingleStorePreparedQueryHKT>(query: Query, fields: SelectedFieldsOrdered | undefined, customResultMapper?: (rows: unknown[][]) => T['execute'], generatedIds?: Record<string, unknown>[], returningIds?: SelectedFieldsOrdered, queryMetadata?: {
+        type: 'select' | 'update' | 'delete' | 'insert';
+        tables: string[];
+    }, cacheConfig?: WithCacheConfig): PreparedQueryKind<TPreparedQueryHKT, T>;
+    execute<T>(query: SQL): Promise<T>;
+    abstract all<T = unknown>(query: SQL): Promise<T[]>;
+    count(sql: SQL): Promise<number>;
+    abstract transaction<T>(transaction: (tx: SingleStoreTransaction<TQueryResult, TPreparedQueryHKT, TFullSchema, TSchema>) => Promise<T>, config?: SingleStoreTransactionConfig): Promise<T>;
+    protected getSetTransactionSQL(config: SingleStoreTransactionConfig): SQL | undefined;
+    protected getStartTransactionSQL(config: SingleStoreTransactionConfig): SQL | undefined;
 }
-export declare class PreparedQuery<T extends SingleStorePreparedQueryConfig> extends PreparedQueryBase<T> {
-    private client;
-    private queryString;
-    private params;
-    private logger;
-    private fields;
-    private customResultMapper?;
-    private generatedIds?;
-    private returningIds?;
+export declare abstract class SingleStoreTransaction<TQueryResult extends SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase, TFullSchema extends Record<string, unknown> = Record<string, never>, TSchema extends TablesRelationalConfig = Record<string, never>> extends SingleStoreDatabase<TQueryResult, TPreparedQueryHKT, TFullSchema, TSchema> {
+    protected schema: RelationalSchemaConfig<TSchema> | undefined;
+    protected readonly nestedIndex: number;
     static readonly [entityKind]: string;
-    constructor(client: RemoteCallback, queryString: string, params: unknown[], logger: Logger, fields: SelectedFieldsOrdered | undefined, customResultMapper?: ((rows: unknown[][]) => T["execute"]) | undefined, generatedIds?: Record<string, unknown>[] | undefined, returningIds?: SelectedFieldsOrdered | undefined);
-    execute(placeholderValues?: Record<string, unknown> | undefined): Promise<T['execute']>;
-    iterator(_placeholderValues?: Record<string, unknown>): AsyncGenerator<T['iterator']>;
+    constructor(dialect: SingleStoreDialect, session: SingleStoreSession, schema: RelationalSchemaConfig<TSchema> | undefined, nestedIndex: number);
+    rollback(): never;
+    /** Nested transactions (aka savepoints) only work with InnoDB engine. */
+    abstract transaction<T>(transaction: (tx: SingleStoreTransaction<TQueryResult, TPreparedQueryHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;
 }
-export interface SingleStoreRemoteQueryResultHKT extends SingleStoreQueryResultHKT {
-    type: SingleStoreRawQueryResult;
-}
-export interface SingleStoreRemotePreparedQueryHKT extends SingleStorePreparedQueryHKT {
-    type: PreparedQuery<Assume<this['config'], SingleStorePreparedQueryConfig>>;
+export interface PreparedQueryHKTBase extends SingleStorePreparedQueryHKT {
+    type: SingleStorePreparedQuery<Assume<this['config'], SingleStorePreparedQueryConfig>>;
 }

@@ -1,17 +1,17 @@
 import { entityKind } from "../entity.js";
 import { TableName } from "../table.utils.js";
-function uniqueKeyName(table, columns) {
-  return `${table[TableName]}_${columns.join("_")}_unique`;
-}
 function unique(name) {
   return new UniqueOnConstraintBuilder(name);
+}
+function uniqueKeyName(table, columns) {
+  return `${table[TableName]}_${columns.join("_")}_unique`;
 }
 class UniqueConstraintBuilder {
   constructor(columns, name) {
     this.name = name;
     this.columns = columns;
   }
-  static [entityKind] = "SQLiteUniqueConstraintBuilder";
+  static [entityKind] = "SingleStoreUniqueConstraintBuilder";
   /** @internal */
   columns;
   /** @internal */
@@ -20,7 +20,7 @@ class UniqueConstraintBuilder {
   }
 }
 class UniqueOnConstraintBuilder {
-  static [entityKind] = "SQLiteUniqueOnConstraintBuilder";
+  static [entityKind] = "SingleStoreUniqueOnConstraintBuilder";
   /** @internal */
   name;
   constructor(name) {
@@ -36,9 +36,10 @@ class UniqueConstraint {
     this.columns = columns;
     this.name = name ?? uniqueKeyName(this.table, this.columns.map((column) => column.name));
   }
-  static [entityKind] = "SQLiteUniqueConstraint";
+  static [entityKind] = "SingleStoreUniqueConstraint";
   columns;
   name;
+  nullsNotDistinct = false;
   getName() {
     return this.name;
   }

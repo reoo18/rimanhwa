@@ -1,1 +1,1 @@
-export declare const SQLiteViewConfig: unique symbol;
+export declare const SingleStoreViewConfig: unique symbol;

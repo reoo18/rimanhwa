@@ -1,26 +1,30 @@
 import { entityKind } from "../entity.js";
 import type { MigrationConfig, MigrationMeta } from "../migrator.js";
 import { type BuildRelationalQueryResult, type DBQueryConfig, type Relation, type TableRelationalConfig, type TablesRelationalConfig } from "../relations.js";
-import { type QueryWithTypings, SQL } from "../sql/sql.js";
-import { SQLiteColumn } from "./columns/index.js";
-import type { SQLiteDeleteConfig, SQLiteInsertConfig, SQLiteUpdateConfig } from "./query-builders/index.js";
-import { SQLiteTable } from "./table.js";
+import type { QueryWithTypings } from "../sql/sql.js";
+import { SQL } from "../sql/sql.js";
 import { type Casing, type UpdateSet } from "../utils.js";
-import type { SQLiteSelectConfig } from "./query-builders/select.types.js";
-import type { SQLiteSession } from "./session.js";
-export interface SQLiteDialectConfig {
+import { SingleStoreColumn } from "./columns/common.js";
+import type { SingleStoreDeleteConfig } from "./query-builders/delete.js";
+import type { SingleStoreInsertConfig } from "./query-builders/insert.js";
+import type { SingleStoreSelectConfig } from "./query-builders/select.types.js";
+import type { SingleStoreUpdateConfig } from "./query-builders/update.js";
+import type { SingleStoreSession } from "./session.js";
+import { SingleStoreTable } from "./table.js";
+export interface SingleStoreDialectConfig {
     casing?: Casing;
 }
-export declare abstract class SQLiteDialect {
+export declare class SingleStoreDialect {
     static readonly [entityKind]: string;
-    constructor(config?: SQLiteDialectConfig);
+    constructor(config?: SingleStoreDialectConfig);
+    migrate(migrations: MigrationMeta[], session: SingleStoreSession, config: Omit<MigrationConfig, 'migrationsSchema'>): Promise<void>;
     escapeName(name: string): string;
     escapeParam(_num: number): string;
     escapeString(str: string): string;
     private buildWithCTE;
-    buildDeleteQuery({ table, where, returning, withList, limit, orderBy, }: SQLiteDeleteConfig): SQL;
-    buildUpdateSet(table: SQLiteTable, set: UpdateSet): SQL;
-    buildUpdateQuery({ table, set, where, returning, withList, joins, from, limit, orderBy, }: SQLiteUpdateConfig): SQL;
+    buildDeleteQuery({ table, where, returning, withList, limit, orderBy, }: SingleStoreDeleteConfig): SQL;
+    buildUpdateSet(table: SingleStoreTable, set: UpdateSet): SQL;
+    buildUpdateQuery({ table, set, where, returning, withList, limit, orderBy, }: SingleStoreUpdateConfig): SQL;
     /**
      * Builds selection SQL with provided fields/expressions
      *
@@ -33,35 +37,28 @@ export declare abstract class SQLiteDialect {
      * If `isSingleTable` is true, then columns won't be prefixed with table name
      */
     private buildSelection;
-    private buildJoins;
     private buildLimit;
     private buildOrderBy;
-    private buildFromTable;
-    buildSelectQuery({ withList, fields, fieldsFlat, where, having, table, joins, orderBy, groupBy, limit, offset, distinct, setOperators, }: SQLiteSelectConfig): SQL;
-    buildSetOperations(leftSelect: SQL, setOperators: SQLiteSelectConfig['setOperators']): SQL;
+    buildSelectQuery({ withList, fields, fieldsFlat, where, having, table, joins, orderBy, groupBy, limit, offset, lockingClause, distinct, setOperators, }: SingleStoreSelectConfig): SQL;
+    buildSetOperations(leftSelect: SQL, setOperators: SingleStoreSelectConfig['setOperators']): SQL;
     buildSetOperationQuery({ leftSelect, setOperator: { type, isAll, rightSelect, limit, orderBy, offset }, }: {
         leftSelect: SQL;
-        setOperator: SQLiteSelectConfig['setOperators'][number];
+        setOperator: SingleStoreSelectConfig['setOperators'][number];
     }): SQL;
-    buildInsertQuery({ table, values: valuesOrSelect, onConflict, returning, withList, select, }: SQLiteInsertConfig): SQL;
+    buildInsertQuery({ table, values, ignore, onConflict, }: SingleStoreInsertConfig): {
+        sql: SQL;
+        generatedIds: Record<string, unknown>[];
+    };
     sqlToQuery(sql: SQL, invokeSource?: 'indexes' | undefined): QueryWithTypings;
     buildRelationalQuery({ fullSchema, schema, tableNamesMap, table, tableConfig, queryConfig: config, tableAlias, nestedQueryRelation, joinOn, }: {
         fullSchema: Record<string, unknown>;
         schema: TablesRelationalConfig;
         tableNamesMap: Record<string, string>;
-        table: SQLiteTable;
+        table: SingleStoreTable;
         tableConfig: TableRelationalConfig;
         queryConfig: true | DBQueryConfig<'many', true>;
         tableAlias: string;
         nestedQueryRelation?: Relation;
         joinOn?: SQL;
-    }): BuildRelationalQueryResult<SQLiteTable, SQLiteColumn>;
-}
-export declare class SQLiteSyncDialect extends SQLiteDialect {
-    static readonly [entityKind]: string;
-    migrate(migrations: MigrationMeta[], session: SQLiteSession<'sync', unknown, Record<string, unknown>, TablesRelationalConfig>, config?: string | MigrationConfig): void;
-}
-export declare class SQLiteAsyncDialect extends SQLiteDialect {
-    static readonly [entityKind]: string;
-    migrate(migrations: MigrationMeta[], session: SQLiteSession<'async', any, any, any>, config?: string | MigrationConfig): Promise<void>;
+    }): BuildRelationalQueryResult<SingleStoreTable, SingleStoreColumn>;
 }

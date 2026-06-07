@@ -19,11 +19,9 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var view_exports = {};
 __export(view_exports, {
   ManualViewBuilder: () => ManualViewBuilder,
-  SQLiteView: () => SQLiteView,
+  SingleStoreView: () => SingleStoreView,
   ViewBuilder: () => ViewBuilder,
-  ViewBuilderCore: () => ViewBuilderCore,
-  sqliteView: () => sqliteView,
-  view: () => view
+  ViewBuilderCore: () => ViewBuilderCore
 });
 module.exports = __toCommonJS(view_exports);
 var import_entity = require("../entity.cjs");
@@ -32,15 +30,33 @@ var import_utils = require("../utils.cjs");
 var import_query_builder = require("./query-builders/query-builder.cjs");
 var import_table = require("./table.cjs");
 var import_view_base = require("./view-base.cjs");
+var import_view_common = require("./view-common.cjs");
 class ViewBuilderCore {
-  constructor(name) {
+  constructor(name, schema) {
     this.name = name;
+    this.schema = schema;
   }
-  static [import_entity.entityKind] = "SQLiteViewBuilderCore";
+  static [import_entity.entityKind] = "SingleStoreViewBuilder";
   config = {};
+  algorithm(algorithm) {
+    this.config.algorithm = algorithm;
+    return this;
+  }
+  definer(definer) {
+    this.config.definer = definer;
+    return this;
+  }
+  sqlSecurity(sqlSecurity) {
+    this.config.sqlSecurity = sqlSecurity;
+    return this;
+  }
+  withCheckOption(withCheckOption) {
+    this.config.withCheckOption = withCheckOption ?? "cascaded";
+    return this;
+  }
 }
 class ViewBuilder extends ViewBuilderCore {
-  static [import_entity.entityKind] = "SQLiteViewBuilder";
+  static [import_entity.entityKind] = "SingleStoreViewBuilder";
   as(qb) {
     if (typeof qb === "function") {
       qb = qb(new import_query_builder.QueryBuilder());
@@ -51,14 +67,14 @@ class ViewBuilder extends ViewBuilderCore {
       sqlAliasedBehavior: "alias",
       replaceOriginalName: true
     });
-    const aliasedSelectedFields = qb.getSelectedFields();
+    const aliasedSelection = new Proxy(qb.getSelectedFields(), selectionProxy);
     return new Proxy(
-      new SQLiteView({
-        // sqliteConfig: this.config,
+      new SingleStoreView({
+        singlestoreConfig: this.config,
         config: {
           name: this.name,
-          schema: void 0,
-          selectedFields: aliasedSelectedFields,
+          schema: this.schema,
+          selectedFields: aliasedSelection,
           query: qb.getSQL().inlineParams()
         }
       }),
@@ -67,18 +83,19 @@ class ViewBuilder extends ViewBuilderCore {
   }
 }
 class ManualViewBuilder extends ViewBuilderCore {
-  static [import_entity.entityKind] = "SQLiteManualViewBuilder";
+  static [import_entity.entityKind] = "SingleStoreManualViewBuilder";
   columns;
-  constructor(name, columns) {
-    super(name);
-    this.columns = (0, import_utils.getTableColumns)((0, import_table.sqliteTable)(name, columns));
+  constructor(name, columns, schema) {
+    super(name, schema);
+    this.columns = (0, import_utils.getTableColumns)((0, import_table.singlestoreTable)(name, columns));
   }
   existing() {
     return new Proxy(
-      new SQLiteView({
+      new SingleStoreView({
+        singlestoreConfig: void 0,
         config: {
           name: this.name,
-          schema: void 0,
+          schema: this.schema,
           selectedFields: this.columns,
           query: void 0
         }
@@ -93,10 +110,11 @@ class ManualViewBuilder extends ViewBuilderCore {
   }
   as(query) {
     return new Proxy(
-      new SQLiteView({
+      new SingleStoreView({
+        singlestoreConfig: this.config,
         config: {
           name: this.name,
-          schema: void 0,
+          schema: this.schema,
           selectedFields: this.columns,
           query: query.inlineParams()
         }
@@ -110,26 +128,19 @@ class ManualViewBuilder extends ViewBuilderCore {
     );
   }
 }
-class SQLiteView extends import_view_base.SQLiteViewBase {
-  static [import_entity.entityKind] = "SQLiteView";
-  constructor({ config }) {
+class SingleStoreView extends import_view_base.SingleStoreViewBase {
+  static [import_entity.entityKind] = "SingleStoreView";
+  [import_view_common.SingleStoreViewConfig];
+  constructor({ singlestoreConfig, config }) {
     super(config);
+    this[import_view_common.SingleStoreViewConfig] = singlestoreConfig;
   }
 }
-function sqliteView(name, selection) {
-  if (selection) {
-    return new ManualViewBuilder(name, selection);
-  }
-  return new ViewBuilder(name);
-}
-const view = sqliteView;
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   ManualViewBuilder,
-  SQLiteView,
+  SingleStoreView,
   ViewBuilder,
-  ViewBuilderCore,
-  sqliteView,
-  view
+  ViewBuilderCore
 });
 //# sourceMappingURL=view.cjs.map

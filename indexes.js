@@ -4,28 +4,32 @@ class IndexBuilderOn {
     this.name = name;
     this.unique = unique;
   }
-  static [entityKind] = "SQLiteIndexBuilderOn";
+  static [entityKind] = "SingleStoreIndexBuilderOn";
   on(...columns) {
     return new IndexBuilder(this.name, columns, this.unique);
   }
 }
 class IndexBuilder {
-  static [entityKind] = "SQLiteIndexBuilder";
+  static [entityKind] = "SingleStoreIndexBuilder";
   /** @internal */
   config;
   constructor(name, columns, unique) {
     this.config = {
       name,
       columns,
-      unique,
-      where: void 0
+      unique
     };
   }
-  /**
-   * Condition for partial index.
-   */
-  where(condition) {
-    this.config.where = condition;
+  using(using) {
+    this.config.using = using;
+    return this;
+  }
+  algorithm(algorithm) {
+    this.config.algorithm = algorithm;
+    return this;
+  }
+  lock(lock) {
+    this.config.lock = lock;
     return this;
   }
   /** @internal */
@@ -34,7 +38,7 @@ class IndexBuilder {
   }
 }
 class Index {
-  static [entityKind] = "SQLiteIndex";
+  static [entityKind] = "SingleStoreIndex";
   config;
   constructor(config, table) {
     this.config = { ...config, table };

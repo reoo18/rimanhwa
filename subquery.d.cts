@@ -3,8 +3,8 @@ import type { AddAliasToSelection } from "../query-builders/select.types.cjs";
 import type { ColumnsSelection, SQL } from "../sql/sql.cjs";
 import type { Subquery, WithSubquery, WithSubqueryWithoutSelection } from "../subquery.cjs";
 import type { QueryBuilder } from "./query-builders/query-builder.cjs";
-export type SubqueryWithSelection<TSelection extends ColumnsSelection, TAlias extends string> = Subquery<TAlias, AddAliasToSelection<TSelection, TAlias, 'sqlite'>> & AddAliasToSelection<TSelection, TAlias, 'sqlite'>;
-export type WithSubqueryWithSelection<TSelection extends ColumnsSelection, TAlias extends string> = WithSubquery<TAlias, AddAliasToSelection<TSelection, TAlias, 'sqlite'>> & AddAliasToSelection<TSelection, TAlias, 'sqlite'>;
+export type SubqueryWithSelection<TSelection extends ColumnsSelection, TAlias extends string> = Subquery<TAlias, AddAliasToSelection<TSelection, TAlias, 'singlestore'>> & AddAliasToSelection<TSelection, TAlias, 'singlestore'>;
+export type WithSubqueryWithSelection<TSelection extends ColumnsSelection, TAlias extends string> = WithSubquery<TAlias, AddAliasToSelection<TSelection, TAlias, 'singlestore'>> & AddAliasToSelection<TSelection, TAlias, 'singlestore'>;
 export interface WithBuilder {
     <TAlias extends string>(alias: TAlias): {
         as: {

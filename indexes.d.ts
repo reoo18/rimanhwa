@@ -1,14 +1,28 @@
 import { entityKind } from "../entity.js";
 import type { SQL } from "../sql/sql.js";
-import type { SQLiteColumn } from "./columns/index.js";
-import type { SQLiteTable } from "./table.js";
-export interface IndexConfig {
+import type { AnySingleStoreColumn, SingleStoreColumn } from "./columns/index.js";
+import type { SingleStoreTable } from "./table.js";
+interface IndexConfig {
     name: string;
     columns: IndexColumn[];
-    unique: boolean;
-    where: SQL | undefined;
+    /**
+     * If true, the index will be created as `create unique index` instead of `create index`.
+     */
+    unique?: boolean;
+    /**
+     * If set, the index will be created as `create index ... using { 'btree' | 'hash' }`.
+     */
+    using?: 'btree' | 'hash';
+    /**
+     * If set, the index will be created as `create index ... algorithm { 'default' | 'inplace' | 'copy' }`.
+     */
+    algorithm?: 'default' | 'inplace' | 'copy';
+    /**
+     * If set, adds locks to the index creation.
+     */
+    lock?: 'default' | 'none' | 'shared' | 'exclusive';
 }
-export type IndexColumn = SQLiteColumn | SQL;
+export type IndexColumn = SingleStoreColumn | SQL;
 export declare class IndexBuilderOn {
     private name;
     private unique;
@@ -16,26 +30,33 @@ export declare class IndexBuilderOn {
     constructor(name: string, unique: boolean);
     on(...columns: [IndexColumn, ...IndexColumn[]]): IndexBuilder;
 }
-export declare class IndexBuilder {
+export interface AnyIndexBuilder {
+    build(table: SingleStoreTable): Index;
+}
+export interface IndexBuilder extends AnyIndexBuilder {
+}
+export declare class IndexBuilder implements AnyIndexBuilder {
     static readonly [entityKind]: string;
-    _: {
-        brand: 'SQLiteIndexBuilder';
-    };
     constructor(name: string, columns: IndexColumn[], unique: boolean);
-    /**
-     * Condition for partial index.
-     */
-    where(condition: SQL): this;
+    using(using: IndexConfig['using']): this;
+    algorithm(algorithm: IndexConfig['algorithm']): this;
+    lock(lock: IndexConfig['lock']): this;
 }
 export declare class Index {
     static readonly [entityKind]: string;
-    _: {
-        brand: 'SQLiteIndex';
-    };
     readonly config: IndexConfig & {
-        table: SQLiteTable;
+        table: SingleStoreTable;
     };
-    constructor(config: IndexConfig, table: SQLiteTable);
+    constructor(config: IndexConfig, table: SingleStoreTable);
 }
+export type GetColumnsTableName<TColumns> = TColumns extends AnySingleStoreColumn<{
+    tableName: infer TTableName extends string;
+}> | AnySingleStoreColumn<{
+    tableName: infer TTableName extends string;
+}>[] ? TTableName : never;
 export declare function index(name: string): IndexBuilderOn;
 export declare function uniqueIndex(name: string): IndexBuilderOn;
+export {};
+/** @internal */
+/** @internal */
+/** @internal */

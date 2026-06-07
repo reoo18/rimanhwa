@@ -18,21 +18,18 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var db_exports = {};
 __export(db_exports, {
-  BaseSQLiteDatabase: () => BaseSQLiteDatabase,
+  SingleStoreDatabase: () => SingleStoreDatabase,
   withReplicas: () => withReplicas
 });
 module.exports = __toCommonJS(db_exports);
 var import_entity = require("../entity.cjs");
 var import_selection_proxy = require("../selection-proxy.cjs");
 var import_sql = require("../sql/sql.cjs");
-var import_query_builders = require("./query-builders/index.cjs");
 var import_subquery = require("../subquery.cjs");
 var import_count = require("./query-builders/count.cjs");
-var import_query = require("./query-builders/query.cjs");
-var import_raw = require("./query-builders/raw.cjs");
-class BaseSQLiteDatabase {
-  constructor(resultKind, dialect, session, schema) {
-    this.resultKind = resultKind;
+var import_query_builders = require("./query-builders/index.cjs");
+class SingleStoreDatabase {
+  constructor(dialect, session, schema) {
     this.dialect = dialect;
     this.session = session;
     this._ = schema ? {
@@ -45,25 +42,12 @@ class BaseSQLiteDatabase {
       tableNamesMap: {}
     };
     this.query = {};
-    const query = this.query;
-    if (this._.schema) {
-      for (const [tableName, columns] of Object.entries(this._.schema)) {
-        query[tableName] = new import_query.RelationalQueryBuilder(
-          resultKind,
-          schema.fullSchema,
-          this._.schema,
-          this._.tableNamesMap,
-          schema.fullSchema[tableName],
-          columns,
-          dialect,
-          session
-        );
-      }
-    }
     this.$cache = { invalidate: async (_params) => {
     } };
   }
-  static [import_entity.entityKind] = "BaseSQLiteDatabase";
+  static [import_entity.entityKind] = "SingleStoreDatabase";
+  // We are waiting for SingleStore support for `json_array` function
+  /**@inrernal */
   query;
   /**
    * Creates a subquery that defines a temporary named result set as a CTE.
@@ -116,7 +100,7 @@ class BaseSQLiteDatabase {
     return { as };
   };
   $count(source, filters) {
-    return new import_count.SQLiteCountBuilder({ source, filters, session: this.session });
+    return new import_count.SingleStoreCountBuilder({ source, filters, session: this.session });
   }
   /**
    * Incorporates a previously defined CTE (using `$with`) into the main query.
@@ -140,7 +124,7 @@ class BaseSQLiteDatabase {
   with(...queries) {
     const self = this;
     function select(fields) {
-      return new import_query_builders.SQLiteSelectBuilder({
+      return new import_query_builders.SingleStoreSelectBuilder({
         fields: fields ?? void 0,
         session: self.session,
         dialect: self.dialect,
@@ -148,7 +132,7 @@ class BaseSQLiteDatabase {
       });
     }
     function selectDistinct(fields) {
-      return new import_query_builders.SQLiteSelectBuilder({
+      return new import_query_builders.SingleStoreSelectBuilder({
         fields: fields ?? void 0,
         session: self.session,
         dialect: self.dialect,
@@ -157,21 +141,18 @@ class BaseSQLiteDatabase {
       });
     }
     function update(table) {
-      return new import_query_builders.SQLiteUpdateBuilder(table, self.session, self.dialect, queries);
+      return new import_query_builders.SingleStoreUpdateBuilder(table, self.session, self.dialect, queries);
     }
-    function insert(into) {
-      return new import_query_builders.SQLiteInsertBuilder(into, self.session, self.dialect, queries);
+    function delete_(table) {
+      return new import_query_builders.SingleStoreDeleteBase(table, self.session, self.dialect, queries);
     }
-    function delete_(from) {
-      return new import_query_builders.SQLiteDeleteBase(from, self.session, self.dialect, queries);
-    }
-    return { select, selectDistinct, update, insert, delete: delete_ };
+    return { select, selectDistinct, update, delete: delete_ };
   }
   select(fields) {
-    return new import_query_builders.SQLiteSelectBuilder({ fields: fields ?? void 0, session: this.session, dialect: this.dialect });
+    return new import_query_builders.SingleStoreSelectBuilder({ fields: fields ?? void 0, session: this.session, dialect: this.dialect });
   }
   selectDistinct(fields) {
-    return new import_query_builders.SQLiteSelectBuilder({
+    return new import_query_builders.SingleStoreSelectBuilder({
       fields: fields ?? void 0,
       session: this.session,
       dialect: this.dialect,
@@ -197,18 +178,11 @@ class BaseSQLiteDatabase {
    *
    * // Update rows with filters and conditions
    * await db.update(cars).set({ color: 'red' }).where(eq(cars.brand, 'BMW'));
-   *
-   * // Update with returning clause
-   * const updatedCar: Car[] = await db.update(cars)
-   *   .set({ color: 'red' })
-   *   .where(eq(cars.id, 1))
-   *   .returning();
    * ```
    */
   update(table) {
-    return new import_query_builders.SQLiteUpdateBuilder(table, this.session, this.dialect);
+    return new import_query_builders.SingleStoreUpdateBuilder(table, this.session, this.dialect);
   }
-  $cache;
   /**
    * Creates an insert query.
    *
@@ -226,15 +200,10 @@ class BaseSQLiteDatabase {
    *
    * // Insert multiple rows
    * await db.insert(cars).values([{ brand: 'BMW' }, { brand: 'Porsche' }]);
-   *
-   * // Insert with returning clause
-   * const insertedCar: Car[] = await db.insert(cars)
-   *   .values({ brand: 'BMW' })
-   *   .returning();
    * ```
    */
-  insert(into) {
-    return new import_query_builders.SQLiteInsertBuilder(into, this.session, this.dialect);
+  insert(table) {
+    return new import_query_builders.SingleStoreInsertBuilder(table, this.session, this.dialect);
   }
   /**
    * Creates a delete query.
@@ -253,68 +222,15 @@ class BaseSQLiteDatabase {
    *
    * // Delete rows with filters and conditions
    * await db.delete(cars).where(eq(cars.color, 'green'));
-   *
-   * // Delete with returning clause
-   * const deletedCar: Car[] = await db.delete(cars)
-   *   .where(eq(cars.id, 1))
-   *   .returning();
    * ```
    */
-  delete(from) {
-    return new import_query_builders.SQLiteDeleteBase(from, this.session, this.dialect);
+  delete(table) {
+    return new import_query_builders.SingleStoreDeleteBase(table, this.session, this.dialect);
   }
-  run(query) {
-    const sequel = typeof query === "string" ? import_sql.sql.raw(query) : query.getSQL();
-    if (this.resultKind === "async") {
-      return new import_raw.SQLiteRaw(
-        async () => this.session.run(sequel),
-        () => sequel,
-        "run",
-        this.dialect,
-        this.session.extractRawRunValueFromBatchResult.bind(this.session)
-      );
-    }
-    return this.session.run(sequel);
+  execute(query) {
+    return this.session.execute(typeof query === "string" ? import_sql.sql.raw(query) : query.getSQL());
   }
-  all(query) {
-    const sequel = typeof query === "string" ? import_sql.sql.raw(query) : query.getSQL();
-    if (this.resultKind === "async") {
-      return new import_raw.SQLiteRaw(
-        async () => this.session.all(sequel),
-        () => sequel,
-        "all",
-        this.dialect,
-        this.session.extractRawAllValueFromBatchResult.bind(this.session)
-      );
-    }
-    return this.session.all(sequel);
-  }
-  get(query) {
-    const sequel = typeof query === "string" ? import_sql.sql.raw(query) : query.getSQL();
-    if (this.resultKind === "async") {
-      return new import_raw.SQLiteRaw(
-        async () => this.session.get(sequel),
-        () => sequel,
-        "get",
-        this.dialect,
-        this.session.extractRawGetValueFromBatchResult.bind(this.session)
-      );
-    }
-    return this.session.get(sequel);
-  }
-  values(query) {
-    const sequel = typeof query === "string" ? import_sql.sql.raw(query) : query.getSQL();
-    if (this.resultKind === "async") {
-      return new import_raw.SQLiteRaw(
-        async () => this.session.values(sequel),
-        () => sequel,
-        "values",
-        this.dialect,
-        this.session.extractRawValuesValueFromBatchResult.bind(this.session)
-      );
-    }
-    return this.session.values(sequel);
-  }
+  $cache;
   transaction(transaction, config) {
     return this.session.transaction(transaction, config);
   }
@@ -327,20 +243,14 @@ const withReplicas = (primary, replicas, getReplica = () => replicas[Math.floor(
   const update = (...args) => primary.update(...args);
   const insert = (...args) => primary.insert(...args);
   const $delete = (...args) => primary.delete(...args);
-  const run = (...args) => primary.run(...args);
-  const all = (...args) => primary.all(...args);
-  const get = (...args) => primary.get(...args);
-  const values = (...args) => primary.values(...args);
+  const execute = (...args) => primary.execute(...args);
   const transaction = (...args) => primary.transaction(...args);
   return {
     ...primary,
     update,
     insert,
     delete: $delete,
-    run,
-    all,
-    get,
-    values,
+    execute,
     transaction,
     $primary: primary,
     $replicas: replicas,
@@ -355,7 +265,7 @@ const withReplicas = (primary, replicas, getReplica = () => replicas[Math.floor(
 };
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  BaseSQLiteDatabase,
+  SingleStoreDatabase,
   withReplicas
 });
 //# sourceMappingURL=db.cjs.map

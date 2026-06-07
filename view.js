@@ -2,17 +2,35 @@ import { entityKind } from "../entity.js";
 import { SelectionProxyHandler } from "../selection-proxy.js";
 import { getTableColumns } from "../utils.js";
 import { QueryBuilder } from "./query-builders/query-builder.js";
-import { sqliteTable } from "./table.js";
-import { SQLiteViewBase } from "./view-base.js";
+import { singlestoreTable } from "./table.js";
+import { SingleStoreViewBase } from "./view-base.js";
+import { SingleStoreViewConfig } from "./view-common.js";
 class ViewBuilderCore {
-  constructor(name) {
+  constructor(name, schema) {
     this.name = name;
+    this.schema = schema;
   }
-  static [entityKind] = "SQLiteViewBuilderCore";
+  static [entityKind] = "SingleStoreViewBuilder";
   config = {};
+  algorithm(algorithm) {
+    this.config.algorithm = algorithm;
+    return this;
+  }
+  definer(definer) {
+    this.config.definer = definer;
+    return this;
+  }
+  sqlSecurity(sqlSecurity) {
+    this.config.sqlSecurity = sqlSecurity;
+    return this;
+  }
+  withCheckOption(withCheckOption) {
+    this.config.withCheckOption = withCheckOption ?? "cascaded";
+    return this;
+  }
 }
 class ViewBuilder extends ViewBuilderCore {
-  static [entityKind] = "SQLiteViewBuilder";
+  static [entityKind] = "SingleStoreViewBuilder";
   as(qb) {
     if (typeof qb === "function") {
       qb = qb(new QueryBuilder());
@@ -23,14 +41,14 @@ class ViewBuilder extends ViewBuilderCore {
       sqlAliasedBehavior: "alias",
       replaceOriginalName: true
     });
-    const aliasedSelectedFields = qb.getSelectedFields();
+    const aliasedSelection = new Proxy(qb.getSelectedFields(), selectionProxy);
     return new Proxy(
-      new SQLiteView({
-        // sqliteConfig: this.config,
+      new SingleStoreView({
+        singlestoreConfig: this.config,
         config: {
           name: this.name,
-          schema: void 0,
-          selectedFields: aliasedSelectedFields,
+          schema: this.schema,
+          selectedFields: aliasedSelection,
           query: qb.getSQL().inlineParams()
         }
       }),
@@ -39,18 +57,19 @@ class ViewBuilder extends ViewBuilderCore {
   }
 }
 class ManualViewBuilder extends ViewBuilderCore {
-  static [entityKind] = "SQLiteManualViewBuilder";
+  static [entityKind] = "SingleStoreManualViewBuilder";
   columns;
-  constructor(name, columns) {
-    super(name);
-    this.columns = getTableColumns(sqliteTable(name, columns));
+  constructor(name, columns, schema) {
+    super(name, schema);
+    this.columns = getTableColumns(singlestoreTable(name, columns));
   }
   existing() {
     return new Proxy(
-      new SQLiteView({
+      new SingleStoreView({
+        singlestoreConfig: void 0,
         config: {
           name: this.name,
-          schema: void 0,
+          schema: this.schema,
           selectedFields: this.columns,
           query: void 0
         }
@@ -65,10 +84,11 @@ class ManualViewBuilder extends ViewBuilderCore {
   }
   as(query) {
     return new Proxy(
-      new SQLiteView({
+      new SingleStoreView({
+        singlestoreConfig: this.config,
         config: {
           name: this.name,
-          schema: void 0,
+          schema: this.schema,
           selectedFields: this.columns,
           query: query.inlineParams()
         }
@@ -82,25 +102,18 @@ class ManualViewBuilder extends ViewBuilderCore {
     );
   }
 }
-class SQLiteView extends SQLiteViewBase {
-  static [entityKind] = "SQLiteView";
-  constructor({ config }) {
+class SingleStoreView extends SingleStoreViewBase {
+  static [entityKind] = "SingleStoreView";
+  [SingleStoreViewConfig];
+  constructor({ singlestoreConfig, config }) {
     super(config);
+    this[SingleStoreViewConfig] = singlestoreConfig;
   }
 }
-function sqliteView(name, selection) {
-  if (selection) {
-    return new ManualViewBuilder(name, selection);
-  }
-  return new ViewBuilder(name);
-}
-const view = sqliteView;
 export {
   ManualViewBuilder,
-  SQLiteView,
+  SingleStoreView,
   ViewBuilder,
-  ViewBuilderCore,
-  sqliteView,
-  view
+  ViewBuilderCore
 };
 //# sourceMappingURL=view.js.map

@@ -1,4 +1,4 @@
 import type { BuildAliasTable } from "./query-builders/select.types.cjs";
-import type { SQLiteTable } from "./table.cjs";
-import type { SQLiteViewBase } from "./view-base.cjs";
-export declare function alias<TTable extends SQLiteTable | SQLiteViewBase, TAlias extends string>(table: TTable, alias: TAlias): BuildAliasTable<TTable, TAlias>;
+import type { SingleStoreTable } from "./table.cjs";
+export declare function alias<TTable extends SingleStoreTable, TAlias extends string>(// | SingleStoreViewBase
+table: TTable, alias: TAlias): BuildAliasTable<TTable, TAlias>;

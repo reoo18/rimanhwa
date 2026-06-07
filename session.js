@@ -1,101 +1,139 @@
-import { Column } from "../column.js";
+import { hashQuery, NoopCache } from "../cache/core/cache.js";
 import { entityKind, is } from "../entity.js";
-import { NoopLogger } from "../logger.js";
-import { SingleStoreTransaction } from "../singlestore-core/index.js";
-import { SingleStorePreparedQuery as PreparedQueryBase, SingleStoreSession } from "../singlestore-core/session.js";
-import { fillPlaceholders } from "../sql/sql.js";
-import { mapResultRow } from "../utils.js";
-class SingleStoreRemoteSession extends SingleStoreSession {
-  constructor(client, dialect, schema, options) {
-    super(dialect);
-    this.client = client;
-    this.schema = schema;
-    this.logger = options.logger ?? new NoopLogger();
+import { DrizzleQueryError, TransactionRollbackError } from "../errors.js";
+import { sql } from "../sql/sql.js";
+import { SingleStoreDatabase } from "./db.js";
+class SingleStorePreparedQuery {
+  constructor(cache, queryMetadata, cacheConfig) {
+    this.cache = cache;
+    this.queryMetadata = queryMetadata;
+    this.cacheConfig = cacheConfig;
+    if (cache && cache.strategy() === "all" && cacheConfig === void 0) {
+      this.cacheConfig = { enable: true, autoInvalidate: true };
+    }
+    if (!this.cacheConfig?.enable) {
+      this.cacheConfig = void 0;
+    }
   }
-  static [entityKind] = "SingleStoreRemoteSession";
-  logger;
-  prepareQuery(query, fields, customResultMapper, generatedIds, returningIds) {
-    return new PreparedQuery(
-      this.client,
-      query.sql,
-      query.params,
-      this.logger,
-      fields,
-      customResultMapper,
-      generatedIds,
-      returningIds
+  static [entityKind] = "SingleStorePreparedQuery";
+  /** @internal */
+  async queryWithCache(queryString, params, query) {
+    if (this.cache === void 0 || is(this.cache, NoopCache) || this.queryMetadata === void 0) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (this.cacheConfig && !this.cacheConfig.enable) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if ((this.queryMetadata.type === "insert" || this.queryMetadata.type === "update" || this.queryMetadata.type === "delete") && this.queryMetadata.tables.length > 0) {
+      try {
+        const [res] = await Promise.all([
+          query(),
+          this.cache.onMutate({ tables: this.queryMetadata.tables })
+        ]);
+        return res;
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (!this.cacheConfig) {
+      try {
+        return await query();
+      } catch (e) {
+        throw new DrizzleQueryError(queryString, params, e);
+      }
+    }
+    if (this.queryMetadata.type === "select") {
+      const fromCache = await this.cache.get(
+        this.cacheConfig.tag ?? (await hashQuery(queryString, params)),
+        this.queryMetadata.tables,
+        this.cacheConfig.tag !== void 0,
+        this.cacheConfig.autoInvalidate
+      );
+      if (fromCache === void 0) {
+        let result;
+        try {
+          result = await query();
+        } catch (e) {
+          throw new DrizzleQueryError(queryString, params, e);
+        }
+        await this.cache.put(
+          this.cacheConfig.tag ?? (await hashQuery(queryString, params)),
+          result,
+          // make sure we send tables that were used in a query only if user wants to invalidate it on each write
+          this.cacheConfig.autoInvalidate ? this.queryMetadata.tables : [],
+          this.cacheConfig.tag !== void 0,
+          this.cacheConfig.config
+        );
+        return result;
+      }
+      return fromCache;
+    }
+    try {
+      return await query();
+    } catch (e) {
+      throw new DrizzleQueryError(queryString, params, e);
+    }
+  }
+  /** @internal */
+  joinsNotNullableMap;
+}
+class SingleStoreSession {
+  constructor(dialect) {
+    this.dialect = dialect;
+  }
+  static [entityKind] = "SingleStoreSession";
+  execute(query) {
+    return this.prepareQuery(
+      this.dialect.sqlToQuery(query),
+      void 0
+    ).execute();
+  }
+  async count(sql2) {
+    const res = await this.execute(sql2);
+    return Number(
+      res[0][0]["count"]
     );
   }
-  all(query) {
-    const querySql = this.dialect.sqlToQuery(query);
-    this.logger.logQuery(querySql.sql, querySql.params);
-    return this.client(querySql.sql, querySql.params, "all").then(({ rows }) => rows);
+  getSetTransactionSQL(config) {
+    const parts = [];
+    if (config.isolationLevel) {
+      parts.push(`isolation level ${config.isolationLevel}`);
+    }
+    return parts.length ? sql`set transaction ${sql.raw(parts.join(" "))}` : void 0;
   }
-  async transaction(_transaction, _config) {
-    throw new Error("Transactions are not supported by the SingleStore Proxy driver");
+  getStartTransactionSQL(config) {
+    const parts = [];
+    if (config.withConsistentSnapshot) {
+      parts.push("with consistent snapshot");
+    }
+    if (config.accessMode) {
+      parts.push(config.accessMode);
+    }
+    return parts.length ? sql`start transaction ${sql.raw(parts.join(" "))}` : void 0;
   }
 }
-class SingleStoreProxyTransaction extends SingleStoreTransaction {
-  static [entityKind] = "SingleStoreProxyTransaction";
-  async transaction(_transaction) {
-    throw new Error("Transactions are not supported by the SingleStore Proxy driver");
+class SingleStoreTransaction extends SingleStoreDatabase {
+  constructor(dialect, session, schema, nestedIndex) {
+    super(dialect, session, schema);
+    this.schema = schema;
+    this.nestedIndex = nestedIndex;
   }
-}
-class PreparedQuery extends PreparedQueryBase {
-  constructor(client, queryString, params, logger, fields, customResultMapper, generatedIds, returningIds) {
-    super();
-    this.client = client;
-    this.queryString = queryString;
-    this.params = params;
-    this.logger = logger;
-    this.fields = fields;
-    this.customResultMapper = customResultMapper;
-    this.generatedIds = generatedIds;
-    this.returningIds = returningIds;
-  }
-  static [entityKind] = "SingleStoreProxyPreparedQuery";
-  async execute(placeholderValues = {}) {
-    const params = fillPlaceholders(this.params, placeholderValues);
-    const { fields, client, queryString, logger, joinsNotNullableMap, customResultMapper, returningIds, generatedIds } = this;
-    logger.logQuery(queryString, params);
-    if (!fields && !customResultMapper) {
-      const { rows: data } = await client(queryString, params, "execute");
-      const insertId = data[0].insertId;
-      const affectedRows = data[0].affectedRows;
-      if (returningIds) {
-        const returningResponse = [];
-        let j = 0;
-        for (let i = insertId; i < insertId + affectedRows; i++) {
-          for (const column of returningIds) {
-            const key = returningIds[0].path[0];
-            if (is(column.field, Column)) {
-              if (column.field.primary && column.field.autoIncrement) {
-                returningResponse.push({ [key]: i });
-              }
-              if (column.field.defaultFn && generatedIds) {
-                returningResponse.push({ [key]: generatedIds[j][key] });
-              }
-            }
-          }
-          j++;
-        }
-        return returningResponse;
-      }
-      return data;
-    }
-    const { rows } = await client(queryString, params, "all");
-    if (customResultMapper) {
-      return customResultMapper(rows);
-    }
-    return rows.map((row) => mapResultRow(fields, row, joinsNotNullableMap));
-  }
-  iterator(_placeholderValues = {}) {
-    throw new Error("Streaming is not supported by the SingleStore Proxy driver");
+  static [entityKind] = "SingleStoreTransaction";
+  rollback() {
+    throw new TransactionRollbackError();
   }
 }
 export {
-  PreparedQuery,
-  SingleStoreProxyTransaction,
-  SingleStoreRemoteSession
+  SingleStorePreparedQuery,
+  SingleStoreSession,
+  SingleStoreTransaction
 };
 //# sourceMappingURL=session.js.map

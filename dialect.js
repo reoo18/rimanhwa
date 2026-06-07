@@ -10,27 +10,55 @@ import {
   normalizeRelation,
   One
 } from "../relations.js";
-import { and, eq } from "../sql/index.js";
-import { Param, SQL, sql } from "../sql/sql.js";
-import { SQLiteColumn } from "./columns/index.js";
-import { SQLiteTable } from "./table.js";
+import { and, eq } from "../sql/expressions/index.js";
+import { Param, SQL, sql, View } from "../sql/sql.js";
 import { Subquery } from "../subquery.js";
 import { getTableName, getTableUniqueName, Table } from "../table.js";
 import { orderSelectedFields } from "../utils.js";
 import { ViewBaseConfig } from "../view-common.js";
-import { SQLiteViewBase } from "./view-base.js";
-class SQLiteDialect {
-  static [entityKind] = "SQLiteDialect";
+import { SingleStoreColumn } from "./columns/common.js";
+import { SingleStoreTable } from "./table.js";
+class SingleStoreDialect {
+  static [entityKind] = "SingleStoreDialect";
   /** @internal */
   casing;
   constructor(config) {
     this.casing = new CasingCache(config?.casing);
   }
+  async migrate(migrations, session, config) {
+    const migrationsTable = config.migrationsTable ?? "__drizzle_migrations";
+    const migrationTableCreate = sql`
+			create table if not exists ${sql.identifier(migrationsTable)} (
+				id serial primary key,
+				hash text not null,
+				created_at bigint
+			)
+		`;
+    await session.execute(migrationTableCreate);
+    const dbMigrations = await session.all(
+      sql`select id, hash, created_at from ${sql.identifier(migrationsTable)} order by created_at desc limit 1`
+    );
+    const lastDbMigration = dbMigrations[0];
+    await session.transaction(async (tx) => {
+      for (const migration of migrations) {
+        if (!lastDbMigration || Number(lastDbMigration.created_at) < migration.folderMillis) {
+          for (const stmt of migration.sql) {
+            await tx.execute(sql.raw(stmt));
+          }
+          await tx.execute(
+            sql`insert into ${sql.identifier(
+              migrationsTable
+            )} (\`hash\`, \`created_at\`) values(${migration.hash}, ${migration.folderMillis})`
+          );
+        }
+      }
+    });
+  }
   escapeName(name) {
-    return `"${name.replace(/"/g, '""')}"`;
+    return `\`${name.replace(/`/g, "``")}\``;
   }
   escapeParam(_num) {
-    return "?";
+    return `?`;
   }
   escapeString(str) {
     return `'${str.replace(/'/g, "''")}'`;
@@ -60,7 +88,7 @@ class SQLiteDialect {
     const whereSql = where ? sql` where ${where}` : void 0;
     const orderBySql = this.buildOrderBy(orderBy);
     const limitSql = this.buildLimit(limit);
-    return sql`${withSql}delete from ${table}${whereSql}${returningSql}${orderBySql}${limitSql}`;
+    return sql`${withSql}delete from ${table}${whereSql}${orderBySql}${limitSql}${returningSql}`;
   }
   buildUpdateSet(table, set) {
     const tableColumns = table[Table.Symbol.Columns];
@@ -87,20 +115,16 @@ class SQLiteDialect {
     where,
     returning,
     withList,
-    joins,
-    from,
     limit,
     orderBy
   }) {
     const withSql = this.buildWithCTE(withList);
     const setSql = this.buildUpdateSet(table, set);
-    const fromSql = from && sql.join([sql.raw(" from "), this.buildFromTable(from)]);
-    const joinsSql = this.buildJoins(joins);
     const returningSql = returning ? sql` returning ${this.buildSelection(returning, { isSingleTable: true })}` : void 0;
     const whereSql = where ? sql` where ${where}` : void 0;
     const orderBySql = this.buildOrderBy(orderBy);
     const limitSql = this.buildLimit(limit);
-    return sql`${withSql}update ${table} set ${setSql}${fromSql}${joinsSql}${whereSql}${returningSql}${orderBySql}${limitSql}`;
+    return sql`${withSql}update ${table} set ${setSql}${whereSql}${orderBySql}${limitSql}${returningSql}`;
   }
   /**
    * Builds selection SQL with provided fields/expressions
@@ -125,7 +149,7 @@ class SQLiteDialect {
           chunk.push(
             new SQL(
               query.queryChunks.map((c) => {
-                if (is(c, Column)) {
+                if (is(c, SingleStoreColumn)) {
                   return sql.identifier(this.casing.getColumnCasing(c));
                 }
                 return c;
@@ -139,32 +163,19 @@ class SQLiteDialect {
           chunk.push(sql` as ${sql.identifier(field.fieldAlias)}`);
         }
       } else if (is(field, Column)) {
-        const tableName = field.table[Table.Symbol.Name];
-        if (field.columnType === "SQLiteNumericBigInt") {
-          if (isSingleTable) {
-            chunk.push(
-              sql`cast(${sql.identifier(this.casing.getColumnCasing(field))} as text)`
-            );
-          } else {
-            chunk.push(
-              sql`cast(${sql.identifier(tableName)}.${sql.identifier(this.casing.getColumnCasing(field))} as text)`
-            );
-          }
+        if (isSingleTable) {
+          chunk.push(sql.identifier(this.casing.getColumnCasing(field)));
         } else {
-          if (isSingleTable) {
-            chunk.push(sql.identifier(this.casing.getColumnCasing(field)));
-          } else {
-            chunk.push(
-              sql`${sql.identifier(tableName)}.${sql.identifier(this.casing.getColumnCasing(field))}`
-            );
-          }
+          chunk.push(field);
         }
       } else if (is(field, Subquery)) {
         const entries = Object.entries(field._.selectedFields);
         if (entries.length === 1) {
           const entry = entries[0][1];
           const fieldDecoder = is(entry, SQL) ? entry.decoder : is(entry, Column) ? { mapFromDriverValue: (v) => entry.mapFromDriverValue(v) } : entry.sql.decoder;
-          if (fieldDecoder) field._.sql.decoder = fieldDecoder;
+          if (fieldDecoder) {
+            field._.sql.decoder = fieldDecoder;
+          }
         }
         chunk.push(field);
       }
@@ -175,62 +186,11 @@ class SQLiteDialect {
     });
     return sql.join(chunks);
   }
-  buildJoins(joins) {
-    if (!joins || joins.length === 0) {
-      return void 0;
-    }
-    const joinsArray = [];
-    if (joins) {
-      for (const [index, joinMeta] of joins.entries()) {
-        if (index === 0) {
-          joinsArray.push(sql` `);
-        }
-        const table = joinMeta.table;
-        const onSql = joinMeta.on ? sql` on ${joinMeta.on}` : void 0;
-        if (is(table, SQLiteTable)) {
-          const tableName = table[SQLiteTable.Symbol.Name];
-          const tableSchema = table[SQLiteTable.Symbol.Schema];
-          const origTableName = table[SQLiteTable.Symbol.OriginalName];
-          const alias = tableName === origTableName ? void 0 : joinMeta.alias;
-          joinsArray.push(
-            sql`${sql.raw(joinMeta.joinType)} join ${tableSchema ? sql`${sql.identifier(tableSchema)}.` : void 0}${sql.identifier(
-              origTableName
-            )}${alias && sql` ${sql.identifier(alias)}`}${onSql}`
-          );
-        } else {
-          joinsArray.push(
-            sql`${sql.raw(joinMeta.joinType)} join ${table}${onSql}`
-          );
-        }
-        if (index < joins.length - 1) {
-          joinsArray.push(sql` `);
-        }
-      }
-    }
-    return sql.join(joinsArray);
-  }
   buildLimit(limit) {
     return typeof limit === "object" || typeof limit === "number" && limit >= 0 ? sql` limit ${limit}` : void 0;
   }
   buildOrderBy(orderBy) {
-    const orderByList = [];
-    if (orderBy) {
-      for (const [index, orderByValue] of orderBy.entries()) {
-        orderByList.push(orderByValue);
-        if (index < orderBy.length - 1) {
-          orderByList.push(sql`, `);
-        }
-      }
-    }
-    return orderByList.length > 0 ? sql` order by ${sql.join(orderByList)}` : void 0;
-  }
-  buildFromTable(table) {
-    if (is(table, Table) && table[Table.Symbol.IsAlias]) {
-      return sql`${sql`${sql.identifier(table[Table.Symbol.Schema] ?? "")}.`.if(table[Table.Symbol.Schema])}${sql.identifier(
-        table[Table.Symbol.OriginalName]
-      )} ${sql.identifier(table[Table.Symbol.Name])}`;
-    }
-    return table;
+    return orderBy && orderBy.length > 0 ? sql` order by ${sql.join(orderBy, sql`, `)}` : void 0;
   }
   buildSelectQuery({
     withList,
@@ -244,12 +204,13 @@ class SQLiteDialect {
     groupBy,
     limit,
     offset,
+    lockingClause,
     distinct,
     setOperators
   }) {
     const fieldsList = fieldsFlat ?? orderSelectedFields(fields);
     for (const f of fieldsList) {
-      if (is(f.field, Column) && getTableName(f.field.table) !== (is(table, Subquery) ? table._.alias : is(table, SQLiteViewBase) ? table[ViewBaseConfig].name : is(table, SQL) ? void 0 : getTableName(table)) && !((table2) => joins?.some(
+      if (is(f.field, Column) && getTableName(f.field.table) !== (is(table, Subquery) ? table._.alias : is(table, SQL) ? void 0 : getTableName(table)) && !((table2) => joins?.some(
         ({ alias }) => alias === (table2[Table.Symbol.IsAlias] ? getTableName(table2) : table2[Table.Symbol.BaseName])
       ))(f.field.table)) {
         const tableName = getTableName(f.field.table);
@@ -264,24 +225,67 @@ class SQLiteDialect {
     const withSql = this.buildWithCTE(withList);
     const distinctSql = distinct ? sql` distinct` : void 0;
     const selection = this.buildSelection(fieldsList, { isSingleTable });
-    const tableSql = this.buildFromTable(table);
-    const joinsSql = this.buildJoins(joins);
-    const whereSql = where ? sql` where ${where}` : void 0;
-    const havingSql = having ? sql` having ${having}` : void 0;
-    const groupByList = [];
-    if (groupBy) {
-      for (const [index, groupByValue] of groupBy.entries()) {
-        groupByList.push(groupByValue);
-        if (index < groupBy.length - 1) {
-          groupByList.push(sql`, `);
+    const tableSql = (() => {
+      if (is(table, Table) && table[Table.Symbol.IsAlias]) {
+        return sql`${sql`${sql.identifier(table[Table.Symbol.Schema] ?? "")}.`.if(table[Table.Symbol.Schema])}${sql.identifier(
+          table[Table.Symbol.OriginalName]
+        )} ${sql.identifier(table[Table.Symbol.Name])}`;
+      }
+      return table;
+    })();
+    const joinsArray = [];
+    if (joins) {
+      for (const [index, joinMeta] of joins.entries()) {
+        if (index === 0) {
+          joinsArray.push(sql` `);
+        }
+        const table2 = joinMeta.table;
+        const lateralSql = joinMeta.lateral ? sql` lateral` : void 0;
+        const onSql = joinMeta.on ? sql` on ${joinMeta.on}` : void 0;
+        if (is(table2, SingleStoreTable)) {
+          const tableName = table2[SingleStoreTable.Symbol.Name];
+          const tableSchema = table2[SingleStoreTable.Symbol.Schema];
+          const origTableName = table2[SingleStoreTable.Symbol.OriginalName];
+          const alias = tableName === origTableName ? void 0 : joinMeta.alias;
+          joinsArray.push(
+            sql`${sql.raw(joinMeta.joinType)} join${lateralSql} ${tableSchema ? sql`${sql.identifier(tableSchema)}.` : void 0}${sql.identifier(origTableName)}${alias && sql` ${sql.identifier(alias)}`}${onSql}`
+          );
+        } else if (is(table2, View)) {
+          const viewName = table2[ViewBaseConfig].name;
+          const viewSchema = table2[ViewBaseConfig].schema;
+          const origViewName = table2[ViewBaseConfig].originalName;
+          const alias = viewName === origViewName ? void 0 : joinMeta.alias;
+          joinsArray.push(
+            sql`${sql.raw(joinMeta.joinType)} join${lateralSql} ${viewSchema ? sql`${sql.identifier(viewSchema)}.` : void 0}${sql.identifier(origViewName)}${alias && sql` ${sql.identifier(alias)}`}${onSql}`
+          );
+        } else {
+          joinsArray.push(
+            sql`${sql.raw(joinMeta.joinType)} join${lateralSql} ${table2}${onSql}`
+          );
+        }
+        if (index < joins.length - 1) {
+          joinsArray.push(sql` `);
         }
       }
     }
-    const groupBySql = groupByList.length > 0 ? sql` group by ${sql.join(groupByList)}` : void 0;
+    const joinsSql = sql.join(joinsArray);
+    const whereSql = where ? sql` where ${where}` : void 0;
+    const havingSql = having ? sql` having ${having}` : void 0;
     const orderBySql = this.buildOrderBy(orderBy);
+    const groupBySql = groupBy && groupBy.length > 0 ? sql` group by ${sql.join(groupBy, sql`, `)}` : void 0;
     const limitSql = this.buildLimit(limit);
     const offsetSql = offset ? sql` offset ${offset}` : void 0;
-    const finalQuery = sql`${withSql}select${distinctSql} ${selection} from ${tableSql}${joinsSql}${whereSql}${groupBySql}${havingSql}${orderBySql}${limitSql}${offsetSql}`;
+    let lockingClausesSql;
+    if (lockingClause) {
+      const { config, strength } = lockingClause;
+      lockingClausesSql = sql` for ${sql.raw(strength)}`;
+      if (config.noWait) {
+        lockingClausesSql.append(sql` nowait`);
+      } else if (config.skipLocked) {
+        lockingClausesSql.append(sql` skip locked`);
+      }
+    }
+    const finalQuery = sql`${withSql}select${distinctSql} ${selection} from ${tableSql}${joinsSql}${whereSql}${groupBySql}${havingSql}${orderBySql}${limitSql}${offsetSql}${lockingClausesSql}`;
     if (setOperators.length > 0) {
       return this.buildSetOperations(finalQuery, setOperators);
     }
@@ -304,29 +308,31 @@ class SQLiteDialect {
     leftSelect,
     setOperator: { type, isAll, rightSelect, limit, orderBy, offset }
   }) {
-    const leftChunk = sql`${leftSelect.getSQL()} `;
-    const rightChunk = sql`${rightSelect.getSQL()}`;
+    const leftChunk = sql`(${leftSelect.getSQL()}) `;
+    const rightChunk = sql`(${rightSelect.getSQL()})`;
     let orderBySql;
     if (orderBy && orderBy.length > 0) {
       const orderByValues = [];
-      for (const singleOrderBy of orderBy) {
-        if (is(singleOrderBy, SQLiteColumn)) {
-          orderByValues.push(sql.identifier(singleOrderBy.name));
-        } else if (is(singleOrderBy, SQL)) {
-          for (let i = 0; i < singleOrderBy.queryChunks.length; i++) {
-            const chunk = singleOrderBy.queryChunks[i];
-            if (is(chunk, SQLiteColumn)) {
-              singleOrderBy.queryChunks[i] = sql.identifier(
+      for (const orderByUnit of orderBy) {
+        if (is(orderByUnit, SingleStoreColumn)) {
+          orderByValues.push(
+            sql.identifier(this.casing.getColumnCasing(orderByUnit))
+          );
+        } else if (is(orderByUnit, SQL)) {
+          for (let i = 0; i < orderByUnit.queryChunks.length; i++) {
+            const chunk = orderByUnit.queryChunks[i];
+            if (is(chunk, SingleStoreColumn)) {
+              orderByUnit.queryChunks[i] = sql.identifier(
                 this.casing.getColumnCasing(chunk)
               );
             }
           }
-          orderByValues.push(sql`${singleOrderBy}`);
+          orderByValues.push(sql`${orderByUnit}`);
         } else {
-          orderByValues.push(sql`${singleOrderBy}`);
+          orderByValues.push(sql`${orderByUnit}`);
         }
       }
-      orderBySql = sql` order by ${sql.join(orderByValues, sql`, `)}`;
+      orderBySql = sql` order by ${sql.join(orderByValues, sql`, `)} `;
     }
     const limitSql = typeof limit === "object" || typeof limit === "number" && limit >= 0 ? sql` limit ${limit}` : void 0;
     const operatorChunk = sql.raw(`${type} ${isAll ? "all " : ""}`);
@@ -335,61 +341,55 @@ class SQLiteDialect {
   }
   buildInsertQuery({
     table,
-    values: valuesOrSelect,
-    onConflict,
-    returning,
-    withList,
-    select
+    values,
+    ignore,
+    onConflict
   }) {
     const valuesSqlList = [];
     const columns = table[Table.Symbol.Columns];
-    const colEntries = Object.entries(columns).filter(
-      ([_, col]) => !col.shouldDisableInsert()
-    );
+    const colEntries = Object.entries(
+      columns
+    ).filter(([_, col]) => !col.shouldDisableInsert());
     const insertOrder = colEntries.map(([, column]) => sql.identifier(this.casing.getColumnCasing(column)));
-    if (select) {
-      const select2 = valuesOrSelect;
-      if (is(select2, SQL)) {
-        valuesSqlList.push(select2);
-      } else {
-        valuesSqlList.push(select2.getSQL());
-      }
-    } else {
-      const values = valuesOrSelect;
-      valuesSqlList.push(sql.raw("values "));
-      for (const [valueIndex, value] of values.entries()) {
-        const valueList = [];
-        for (const [fieldName, col] of colEntries) {
-          const colValue = value[fieldName];
-          if (colValue === void 0 || is(colValue, Param) && colValue.value === void 0) {
-            let defaultValue;
-            if (col.default !== null && col.default !== void 0) {
-              defaultValue = is(col.default, SQL) ? col.default : sql.param(col.default, col);
-            } else if (col.defaultFn !== void 0) {
-              const defaultFnResult = col.defaultFn();
-              defaultValue = is(defaultFnResult, SQL) ? defaultFnResult : sql.param(defaultFnResult, col);
-            } else if (!col.default && col.onUpdateFn !== void 0) {
-              const onUpdateFnResult = col.onUpdateFn();
-              defaultValue = is(onUpdateFnResult, SQL) ? onUpdateFnResult : sql.param(onUpdateFnResult, col);
-            } else {
-              defaultValue = sql`null`;
-            }
+    const generatedIdsResponse = [];
+    for (const [valueIndex, value] of values.entries()) {
+      const generatedIds = {};
+      const valueList = [];
+      for (const [fieldName, col] of colEntries) {
+        const colValue = value[fieldName];
+        if (colValue === void 0 || is(colValue, Param) && colValue.value === void 0) {
+          if (col.defaultFn !== void 0) {
+            const defaultFnResult = col.defaultFn();
+            generatedIds[fieldName] = defaultFnResult;
+            const defaultValue = is(defaultFnResult, SQL) ? defaultFnResult : sql.param(defaultFnResult, col);
             valueList.push(defaultValue);
+          } else if (!col.default && col.onUpdateFn !== void 0) {
+            const onUpdateFnResult = col.onUpdateFn();
+            const newValue = is(onUpdateFnResult, SQL) ? onUpdateFnResult : sql.param(onUpdateFnResult, col);
+            valueList.push(newValue);
           } else {
-            valueList.push(colValue);
+            valueList.push(sql`default`);
           }
+        } else {
+          if (col.defaultFn && is(colValue, Param)) {
+            generatedIds[fieldName] = colValue.value;
+          }
+          valueList.push(colValue);
         }
-        valuesSqlList.push(valueList);
-        if (valueIndex < values.length - 1) {
-          valuesSqlList.push(sql`, `);
-        }
+      }
+      generatedIdsResponse.push(generatedIds);
+      valuesSqlList.push(valueList);
+      if (valueIndex < values.length - 1) {
+        valuesSqlList.push(sql`, `);
       }
     }
-    const withSql = this.buildWithCTE(withList);
     const valuesSql = sql.join(valuesSqlList);
-    const returningSql = returning ? sql` returning ${this.buildSelection(returning, { isSingleTable: true })}` : void 0;
-    const onConflictSql = onConflict?.length ? sql.join(onConflict) : void 0;
-    return sql`${withSql}insert into ${table} ${insertOrder} ${valuesSql}${onConflictSql}${returningSql}`;
+    const ignoreSql = ignore ? sql` ignore` : void 0;
+    const onConflictSql = onConflict ? sql` on duplicate key ${onConflict}` : void 0;
+    return {
+      sql: sql`insert${ignoreSql} into ${table} ${insertOrder} values ${valuesSql}${onConflictSql}`,
+      generatedIds: generatedIdsResponse
+    };
   }
   sqlToQuery(sql2, invokeSource) {
     return sql2.toQuery({
@@ -412,7 +412,7 @@ class SQLiteDialect {
     joinOn
   }) {
     let selection = [];
-    let limit, offset, orderBy = [], where;
+    let limit, offset, orderBy, where;
     const joins = [];
     if (config === true) {
       const selectionEntries = Object.entries(tableConfig.columns);
@@ -498,7 +498,10 @@ class SQLiteDialect {
       }
       orderBy = orderByOrig.map((orderByValue) => {
         if (is(orderByValue, Column)) {
-          return aliasedTableColumn(orderByValue, tableAlias);
+          return aliasedTableColumn(
+            orderByValue,
+            tableAlias
+          );
         }
         return mapColumnsInSQLToAlias(orderByValue, tableAlias);
       });
@@ -539,7 +542,16 @@ class SQLiteDialect {
           joinOn: joinOn2,
           nestedQueryRelation: relation
         });
-        const field = sql`(${builtRelation.sql})`.as(selectedRelationTsKey);
+        const field = sql`${sql.identifier(relationTableAlias)}.${sql.identifier("data")}`.as(
+          selectedRelationTsKey
+        );
+        joins.push({
+          on: sql`true`,
+          table: new Subquery(builtRelation.sql, {}, relationTableAlias),
+          alias: relationTableAlias,
+          joinType: "left",
+          lateral: true
+        });
         selection.push({
           dbKey: selectedRelationTsKey,
           tsKey: selectedRelationTsKey,
@@ -552,20 +564,20 @@ class SQLiteDialect {
     }
     if (selection.length === 0) {
       throw new DrizzleError({
-        message: `No fields selected for table "${tableConfig.tsName}" ("${tableAlias}"). You need to have at least one item in "columns", "with" or "extras". If you need to select all columns, omit the "columns" key or set it to undefined.`
+        message: `No fields selected for table "${tableConfig.tsName}" ("${tableAlias}")`
       });
     }
     let result;
     where = and(joinOn, where);
     if (nestedQueryRelation) {
-      let field = sql`json_array(${sql.join(
+      let field = sql`JSON_TO_ARRAY(${sql.join(
         selection.map(
-          ({ field: field2 }) => is(field2, SQLiteColumn) ? sql.identifier(this.casing.getColumnCasing(field2)) : is(field2, SQL.Aliased) ? field2.sql : field2
+          ({ field: field2, tsKey, isJson }) => isJson ? sql`${sql.identifier(`${tableAlias}_${tsKey}`)}.${sql.identifier("data")}` : is(field2, SQL.Aliased) ? field2.sql : field2
         ),
         sql`, `
       )})`;
       if (is(nestedQueryRelation, Many)) {
-        field = sql`coalesce(json_group_array(${field}), json_array())`;
+        field = sql`json_agg(${field})`;
       }
       const nestedSelection = [
         {
@@ -577,7 +589,7 @@ class SQLiteDialect {
           selection
         }
       ];
-      const needsSubquery = limit !== void 0 || offset !== void 0 || orderBy.length > 0;
+      const needsSubquery = limit !== void 0 || offset !== void 0 || (orderBy?.length ?? 0) > 0;
       if (needsSubquery) {
         result = this.buildSelectQuery({
           table: aliasedTable(table, tableAlias),
@@ -586,12 +598,17 @@ class SQLiteDialect {
             {
               path: [],
               field: sql.raw("*")
-            }
+            },
+            ...((orderBy?.length ?? 0) > 0 ? [
+              {
+                path: [],
+                field: sql`row_number() over (order by ${sql.join(orderBy, sql`, `)})`
+              }
+            ] : [])
           ],
           where,
           limit,
           offset,
-          orderBy,
           setOperators: []
         });
         where = void 0;
@@ -602,7 +619,7 @@ class SQLiteDialect {
         result = aliasedTable(table, tableAlias);
       }
       result = this.buildSelectQuery({
-        table: is(result, SQLiteTable) ? result : new Subquery(result, {}, tableAlias),
+        table: is(result, SingleStoreTable) ? result : new Subquery(result, {}, tableAlias),
         fields: {},
         fieldsFlat: nestedSelection.map(({ field: field2 }) => ({
           path: [],
@@ -638,78 +655,7 @@ class SQLiteDialect {
     };
   }
 }
-class SQLiteSyncDialect extends SQLiteDialect {
-  static [entityKind] = "SQLiteSyncDialect";
-  migrate(migrations, session, config) {
-    const migrationsTable = config === void 0 ? "__drizzle_migrations" : typeof config === "string" ? "__drizzle_migrations" : config.migrationsTable ?? "__drizzle_migrations";
-    const migrationTableCreate = sql`
-			CREATE TABLE IF NOT EXISTS ${sql.identifier(migrationsTable)} (
-				id SERIAL PRIMARY KEY,
-				hash text NOT NULL,
-				created_at numeric
-			)
-		`;
-    session.run(migrationTableCreate);
-    const dbMigrations = session.values(
-      sql`SELECT id, hash, created_at FROM ${sql.identifier(migrationsTable)} ORDER BY created_at DESC LIMIT 1`
-    );
-    const lastDbMigration = dbMigrations[0] ?? void 0;
-    session.run(sql`BEGIN`);
-    try {
-      for (const migration of migrations) {
-        if (!lastDbMigration || Number(lastDbMigration[2]) < migration.folderMillis) {
-          for (const stmt of migration.sql) {
-            session.run(sql.raw(stmt));
-          }
-          session.run(
-            sql`INSERT INTO ${sql.identifier(
-              migrationsTable
-            )} ("hash", "created_at") VALUES(${migration.hash}, ${migration.folderMillis})`
-          );
-        }
-      }
-      session.run(sql`COMMIT`);
-    } catch (e) {
-      session.run(sql`ROLLBACK`);
-      throw e;
-    }
-  }
-}
-class SQLiteAsyncDialect extends SQLiteDialect {
-  static [entityKind] = "SQLiteAsyncDialect";
-  async migrate(migrations, session, config) {
-    const migrationsTable = config === void 0 ? "__drizzle_migrations" : typeof config === "string" ? "__drizzle_migrations" : config.migrationsTable ?? "__drizzle_migrations";
-    const migrationTableCreate = sql`
-			CREATE TABLE IF NOT EXISTS ${sql.identifier(migrationsTable)} (
-				id SERIAL PRIMARY KEY,
-				hash text NOT NULL,
-				created_at numeric
-			)
-		`;
-    await session.run(migrationTableCreate);
-    const dbMigrations = await session.values(
-      sql`SELECT id, hash, created_at FROM ${sql.identifier(migrationsTable)} ORDER BY created_at DESC LIMIT 1`
-    );
-    const lastDbMigration = dbMigrations[0] ?? void 0;
-    await session.transaction(async (tx) => {
-      for (const migration of migrations) {
-        if (!lastDbMigration || Number(lastDbMigration[2]) < migration.folderMillis) {
-          for (const stmt of migration.sql) {
-            await tx.run(sql.raw(stmt));
-          }
-          await tx.run(
-            sql`INSERT INTO ${sql.identifier(
-              migrationsTable
-            )} ("hash", "created_at") VALUES(${migration.hash}, ${migration.folderMillis})`
-          );
-        }
-      }
-    });
-  }
-}
 export {
-  SQLiteAsyncDialect,
-  SQLiteDialect,
-  SQLiteSyncDialect
+  SingleStoreDialect
 };
 //# sourceMappingURL=dialect.js.map

@@ -27,18 +27,18 @@ __export(unique_constraint_exports, {
 module.exports = __toCommonJS(unique_constraint_exports);
 var import_entity = require("../entity.cjs");
 var import_table_utils = require("../table.utils.cjs");
-function uniqueKeyName(table, columns) {
-  return `${table[import_table_utils.TableName]}_${columns.join("_")}_unique`;
-}
 function unique(name) {
   return new UniqueOnConstraintBuilder(name);
+}
+function uniqueKeyName(table, columns) {
+  return `${table[import_table_utils.TableName]}_${columns.join("_")}_unique`;
 }
 class UniqueConstraintBuilder {
   constructor(columns, name) {
     this.name = name;
     this.columns = columns;
   }
-  static [import_entity.entityKind] = "SQLiteUniqueConstraintBuilder";
+  static [import_entity.entityKind] = "SingleStoreUniqueConstraintBuilder";
   /** @internal */
   columns;
   /** @internal */
@@ -47,7 +47,7 @@ class UniqueConstraintBuilder {
   }
 }
 class UniqueOnConstraintBuilder {
-  static [import_entity.entityKind] = "SQLiteUniqueOnConstraintBuilder";
+  static [import_entity.entityKind] = "SingleStoreUniqueOnConstraintBuilder";
   /** @internal */
   name;
   constructor(name) {
@@ -63,9 +63,10 @@ class UniqueConstraint {
     this.columns = columns;
     this.name = name ?? uniqueKeyName(this.table, this.columns.map((column) => column.name));
   }
-  static [import_entity.entityKind] = "SQLiteUniqueConstraint";
+  static [import_entity.entityKind] = "SingleStoreUniqueConstraint";
   columns;
   name;
+  nullsNotDistinct = false;
   getName() {
     return this.name;
   }

@@ -1,20 +1,17 @@
 import { entityKind } from "../entity.js";
 import { SelectionProxyHandler } from "../selection-proxy.js";
 import { sql } from "../sql/sql.js";
+import { WithSubquery } from "../subquery.js";
+import { SingleStoreCountBuilder } from "./query-builders/count.js";
 import {
   QueryBuilder,
-  SQLiteDeleteBase,
-  SQLiteInsertBuilder,
-  SQLiteSelectBuilder,
-  SQLiteUpdateBuilder
+  SingleStoreDeleteBase,
+  SingleStoreInsertBuilder,
+  SingleStoreSelectBuilder,
+  SingleStoreUpdateBuilder
 } from "./query-builders/index.js";
-import { WithSubquery } from "../subquery.js";
-import { SQLiteCountBuilder } from "./query-builders/count.js";
-import { RelationalQueryBuilder } from "./query-builders/query.js";
-import { SQLiteRaw } from "./query-builders/raw.js";
-class BaseSQLiteDatabase {
-  constructor(resultKind, dialect, session, schema) {
-    this.resultKind = resultKind;
+class SingleStoreDatabase {
+  constructor(dialect, session, schema) {
     this.dialect = dialect;
     this.session = session;
     this._ = schema ? {
@@ -27,25 +24,12 @@ class BaseSQLiteDatabase {
       tableNamesMap: {}
     };
     this.query = {};
-    const query = this.query;
-    if (this._.schema) {
-      for (const [tableName, columns] of Object.entries(this._.schema)) {
-        query[tableName] = new RelationalQueryBuilder(
-          resultKind,
-          schema.fullSchema,
-          this._.schema,
-          this._.tableNamesMap,
-          schema.fullSchema[tableName],
-          columns,
-          dialect,
-          session
-        );
-      }
-    }
     this.$cache = { invalidate: async (_params) => {
     } };
   }
-  static [entityKind] = "BaseSQLiteDatabase";
+  static [entityKind] = "SingleStoreDatabase";
+  // We are waiting for SingleStore support for `json_array` function
+  /**@inrernal */
   query;
   /**
    * Creates a subquery that defines a temporary named result set as a CTE.
@@ -98,7 +82,7 @@ class BaseSQLiteDatabase {
     return { as };
   };
   $count(source, filters) {
-    return new SQLiteCountBuilder({ source, filters, session: this.session });
+    return new SingleStoreCountBuilder({ source, filters, session: this.session });
   }
   /**
    * Incorporates a previously defined CTE (using `$with`) into the main query.
@@ -122,7 +106,7 @@ class BaseSQLiteDatabase {
   with(...queries) {
     const self = this;
     function select(fields) {
-      return new SQLiteSelectBuilder({
+      return new SingleStoreSelectBuilder({
         fields: fields ?? void 0,
         session: self.session,
         dialect: self.dialect,
@@ -130,7 +114,7 @@ class BaseSQLiteDatabase {
       });
     }
     function selectDistinct(fields) {
-      return new SQLiteSelectBuilder({
+      return new SingleStoreSelectBuilder({
         fields: fields ?? void 0,
         session: self.session,
         dialect: self.dialect,
@@ -139,21 +123,18 @@ class BaseSQLiteDatabase {
       });
     }
     function update(table) {
-      return new SQLiteUpdateBuilder(table, self.session, self.dialect, queries);
+      return new SingleStoreUpdateBuilder(table, self.session, self.dialect, queries);
     }
-    function insert(into) {
-      return new SQLiteInsertBuilder(into, self.session, self.dialect, queries);
+    function delete_(table) {
+      return new SingleStoreDeleteBase(table, self.session, self.dialect, queries);
     }
-    function delete_(from) {
-      return new SQLiteDeleteBase(from, self.session, self.dialect, queries);
-    }
-    return { select, selectDistinct, update, insert, delete: delete_ };
+    return { select, selectDistinct, update, delete: delete_ };
   }
   select(fields) {
-    return new SQLiteSelectBuilder({ fields: fields ?? void 0, session: this.session, dialect: this.dialect });
+    return new SingleStoreSelectBuilder({ fields: fields ?? void 0, session: this.session, dialect: this.dialect });
   }
   selectDistinct(fields) {
-    return new SQLiteSelectBuilder({
+    return new SingleStoreSelectBuilder({
       fields: fields ?? void 0,
       session: this.session,
       dialect: this.dialect,
@@ -179,18 +160,11 @@ class BaseSQLiteDatabase {
    *
    * // Update rows with filters and conditions
    * await db.update(cars).set({ color: 'red' }).where(eq(cars.brand, 'BMW'));
-   *
-   * // Update with returning clause
-   * const updatedCar: Car[] = await db.update(cars)
-   *   .set({ color: 'red' })
-   *   .where(eq(cars.id, 1))
-   *   .returning();
    * ```
    */
   update(table) {
-    return new SQLiteUpdateBuilder(table, this.session, this.dialect);
+    return new SingleStoreUpdateBuilder(table, this.session, this.dialect);
   }
-  $cache;
   /**
    * Creates an insert query.
    *
@@ -208,15 +182,10 @@ class BaseSQLiteDatabase {
    *
    * // Insert multiple rows
    * await db.insert(cars).values([{ brand: 'BMW' }, { brand: 'Porsche' }]);
-   *
-   * // Insert with returning clause
-   * const insertedCar: Car[] = await db.insert(cars)
-   *   .values({ brand: 'BMW' })
-   *   .returning();
    * ```
    */
-  insert(into) {
-    return new SQLiteInsertBuilder(into, this.session, this.dialect);
+  insert(table) {
+    return new SingleStoreInsertBuilder(table, this.session, this.dialect);
   }
   /**
    * Creates a delete query.
@@ -235,68 +204,15 @@ class BaseSQLiteDatabase {
    *
    * // Delete rows with filters and conditions
    * await db.delete(cars).where(eq(cars.color, 'green'));
-   *
-   * // Delete with returning clause
-   * const deletedCar: Car[] = await db.delete(cars)
-   *   .where(eq(cars.id, 1))
-   *   .returning();
    * ```
    */
-  delete(from) {
-    return new SQLiteDeleteBase(from, this.session, this.dialect);
+  delete(table) {
+    return new SingleStoreDeleteBase(table, this.session, this.dialect);
   }
-  run(query) {
-    const sequel = typeof query === "string" ? sql.raw(query) : query.getSQL();
-    if (this.resultKind === "async") {
-      return new SQLiteRaw(
-        async () => this.session.run(sequel),
-        () => sequel,
-        "run",
-        this.dialect,
-        this.session.extractRawRunValueFromBatchResult.bind(this.session)
-      );
-    }
-    return this.session.run(sequel);
+  execute(query) {
+    return this.session.execute(typeof query === "string" ? sql.raw(query) : query.getSQL());
   }
-  all(query) {
-    const sequel = typeof query === "string" ? sql.raw(query) : query.getSQL();
-    if (this.resultKind === "async") {
-      return new SQLiteRaw(
-        async () => this.session.all(sequel),
-        () => sequel,
-        "all",
-        this.dialect,
-        this.session.extractRawAllValueFromBatchResult.bind(this.session)
-      );
-    }
-    return this.session.all(sequel);
-  }
-  get(query) {
-    const sequel = typeof query === "string" ? sql.raw(query) : query.getSQL();
-    if (this.resultKind === "async") {
-      return new SQLiteRaw(
-        async () => this.session.get(sequel),
-        () => sequel,
-        "get",
-        this.dialect,
-        this.session.extractRawGetValueFromBatchResult.bind(this.session)
-      );
-    }
-    return this.session.get(sequel);
-  }
-  values(query) {
-    const sequel = typeof query === "string" ? sql.raw(query) : query.getSQL();
-    if (this.resultKind === "async") {
-      return new SQLiteRaw(
-        async () => this.session.values(sequel),
-        () => sequel,
-        "values",
-        this.dialect,
-        this.session.extractRawValuesValueFromBatchResult.bind(this.session)
-      );
-    }
-    return this.session.values(sequel);
-  }
+  $cache;
   transaction(transaction, config) {
     return this.session.transaction(transaction, config);
   }
@@ -309,20 +225,14 @@ const withReplicas = (primary, replicas, getReplica = () => replicas[Math.floor(
   const update = (...args) => primary.update(...args);
   const insert = (...args) => primary.insert(...args);
   const $delete = (...args) => primary.delete(...args);
-  const run = (...args) => primary.run(...args);
-  const all = (...args) => primary.all(...args);
-  const get = (...args) => primary.get(...args);
-  const values = (...args) => primary.values(...args);
+  const execute = (...args) => primary.execute(...args);
   const transaction = (...args) => primary.transaction(...args);
   return {
     ...primary,
     update,
     insert,
     delete: $delete,
-    run,
-    all,
-    get,
-    values,
+    execute,
     transaction,
     $primary: primary,
     $replicas: replicas,
@@ -336,7 +246,7 @@ const withReplicas = (primary, replicas, getReplica = () => replicas[Math.floor(
   };
 };
 export {
-  BaseSQLiteDatabase,
+  SingleStoreDatabase,
   withReplicas
 };
 //# sourceMappingURL=db.js.map

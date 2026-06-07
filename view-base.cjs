@@ -18,16 +18,16 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var view_base_exports = {};
 __export(view_base_exports, {
-  SQLiteViewBase: () => SQLiteViewBase
+  SingleStoreViewBase: () => SingleStoreViewBase
 });
 module.exports = __toCommonJS(view_base_exports);
 var import_entity = require("../entity.cjs");
 var import_sql = require("../sql/sql.cjs");
-class SQLiteViewBase extends import_sql.View {
-  static [import_entity.entityKind] = "SQLiteViewBase";
+class SingleStoreViewBase extends import_sql.View {
+  static [import_entity.entityKind] = "SingleStoreViewBase";
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SQLiteViewBase
+  SingleStoreViewBase
 });
 //# sourceMappingURL=view-base.cjs.map

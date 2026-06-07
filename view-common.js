@@ -1,5 +1,5 @@
-const SQLiteViewConfig = Symbol.for("drizzle:SQLiteViewConfig");
+const SingleStoreViewConfig = Symbol.for("drizzle:SingleStoreViewConfig");
 export {
-  SQLiteViewConfig
+  SingleStoreViewConfig
 };
 //# sourceMappingURL=view-common.js.map

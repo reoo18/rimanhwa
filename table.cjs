@@ -18,38 +18,32 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var table_exports = {};
 __export(table_exports, {
-  InlineForeignKeys: () => InlineForeignKeys,
-  SQLiteTable: () => SQLiteTable,
-  sqliteTable: () => sqliteTable,
-  sqliteTableCreator: () => sqliteTableCreator
+  SingleStoreTable: () => SingleStoreTable,
+  singlestoreTable: () => singlestoreTable,
+  singlestoreTableCreator: () => singlestoreTableCreator,
+  singlestoreTableWithSchema: () => singlestoreTableWithSchema
 });
 module.exports = __toCommonJS(table_exports);
 var import_entity = require("../entity.cjs");
 var import_table = require("../table.cjs");
 var import_all = require("./columns/all.cjs");
-const InlineForeignKeys = Symbol.for("drizzle:SQLiteInlineForeignKeys");
-class SQLiteTable extends import_table.Table {
-  static [import_entity.entityKind] = "SQLiteTable";
+class SingleStoreTable extends import_table.Table {
+  static [import_entity.entityKind] = "SingleStoreTable";
   /** @internal */
-  static Symbol = Object.assign({}, import_table.Table.Symbol, {
-    InlineForeignKeys
-  });
+  static Symbol = Object.assign({}, import_table.Table.Symbol, {});
   /** @internal */
   [import_table.Table.Symbol.Columns];
   /** @internal */
-  [InlineForeignKeys] = [];
-  /** @internal */
   [import_table.Table.Symbol.ExtraConfigBuilder] = void 0;
 }
-function sqliteTableBase(name, columns, extraConfig, schema, baseName = name) {
-  const rawTable = new SQLiteTable(name, schema, baseName);
-  const parsedColumns = typeof columns === "function" ? columns((0, import_all.getSQLiteColumnBuilders)()) : columns;
+function singlestoreTableWithSchema(name, columns, extraConfig, schema, baseName = name) {
+  const rawTable = new SingleStoreTable(name, schema, baseName);
+  const parsedColumns = typeof columns === "function" ? columns((0, import_all.getSingleStoreColumnBuilders)()) : columns;
   const builtColumns = Object.fromEntries(
     Object.entries(parsedColumns).map(([name2, colBuilderBase]) => {
       const colBuilder = colBuilderBase;
       colBuilder.setName(name2);
       const column = colBuilder.build(rawTable);
-      rawTable[InlineForeignKeys].push(...colBuilder.buildForeignKeys(column, rawTable));
       return [name2, column];
     })
   );
@@ -57,23 +51,23 @@ function sqliteTableBase(name, columns, extraConfig, schema, baseName = name) {
   table[import_table.Table.Symbol.Columns] = builtColumns;
   table[import_table.Table.Symbol.ExtraConfigColumns] = builtColumns;
   if (extraConfig) {
-    table[SQLiteTable.Symbol.ExtraConfigBuilder] = extraConfig;
+    table[SingleStoreTable.Symbol.ExtraConfigBuilder] = extraConfig;
   }
   return table;
 }
-const sqliteTable = (name, columns, extraConfig) => {
-  return sqliteTableBase(name, columns, extraConfig);
+const singlestoreTable = (name, columns, extraConfig) => {
+  return singlestoreTableWithSchema(name, columns, extraConfig, void 0, name);
 };
-function sqliteTableCreator(customizeTableName) {
+function singlestoreTableCreator(customizeTableName) {
   return (name, columns, extraConfig) => {
-    return sqliteTableBase(customizeTableName(name), columns, extraConfig, void 0, name);
+    return singlestoreTableWithSchema(customizeTableName(name), columns, extraConfig, void 0, name);
   };
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  InlineForeignKeys,
-  SQLiteTable,
-  sqliteTable,
-  sqliteTableCreator
+  SingleStoreTable,
+  singlestoreTable,
+  singlestoreTableCreator,
+  singlestoreTableWithSchema
 });
 //# sourceMappingURL=table.cjs.map

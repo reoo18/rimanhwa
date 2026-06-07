@@ -1,29 +1,23 @@
 import { entityKind } from "../entity.js";
 import { Table } from "../table.js";
-import { getSQLiteColumnBuilders } from "./columns/all.js";
-const InlineForeignKeys = Symbol.for("drizzle:SQLiteInlineForeignKeys");
-class SQLiteTable extends Table {
-  static [entityKind] = "SQLiteTable";
+import { getSingleStoreColumnBuilders } from "./columns/all.js";
+class SingleStoreTable extends Table {
+  static [entityKind] = "SingleStoreTable";
   /** @internal */
-  static Symbol = Object.assign({}, Table.Symbol, {
-    InlineForeignKeys
-  });
+  static Symbol = Object.assign({}, Table.Symbol, {});
   /** @internal */
   [Table.Symbol.Columns];
   /** @internal */
-  [InlineForeignKeys] = [];
-  /** @internal */
   [Table.Symbol.ExtraConfigBuilder] = void 0;
 }
-function sqliteTableBase(name, columns, extraConfig, schema, baseName = name) {
-  const rawTable = new SQLiteTable(name, schema, baseName);
-  const parsedColumns = typeof columns === "function" ? columns(getSQLiteColumnBuilders()) : columns;
+function singlestoreTableWithSchema(name, columns, extraConfig, schema, baseName = name) {
+  const rawTable = new SingleStoreTable(name, schema, baseName);
+  const parsedColumns = typeof columns === "function" ? columns(getSingleStoreColumnBuilders()) : columns;
   const builtColumns = Object.fromEntries(
     Object.entries(parsedColumns).map(([name2, colBuilderBase]) => {
       const colBuilder = colBuilderBase;
       colBuilder.setName(name2);
       const column = colBuilder.build(rawTable);
-      rawTable[InlineForeignKeys].push(...colBuilder.buildForeignKeys(column, rawTable));
       return [name2, column];
     })
   );
@@ -31,22 +25,22 @@ function sqliteTableBase(name, columns, extraConfig, schema, baseName = name) {
   table[Table.Symbol.Columns] = builtColumns;
   table[Table.Symbol.ExtraConfigColumns] = builtColumns;
   if (extraConfig) {
-    table[SQLiteTable.Symbol.ExtraConfigBuilder] = extraConfig;
+    table[SingleStoreTable.Symbol.ExtraConfigBuilder] = extraConfig;
   }
   return table;
 }
-const sqliteTable = (name, columns, extraConfig) => {
-  return sqliteTableBase(name, columns, extraConfig);
+const singlestoreTable = (name, columns, extraConfig) => {
+  return singlestoreTableWithSchema(name, columns, extraConfig, void 0, name);
 };
-function sqliteTableCreator(customizeTableName) {
+function singlestoreTableCreator(customizeTableName) {
   return (name, columns, extraConfig) => {
-    return sqliteTableBase(customizeTableName(name), columns, extraConfig, void 0, name);
+    return singlestoreTableWithSchema(customizeTableName(name), columns, extraConfig, void 0, name);
   };
 }
 export {
-  InlineForeignKeys,
-  SQLiteTable,
-  sqliteTable,
-  sqliteTableCreator
+  SingleStoreTable,
+  singlestoreTable,
+  singlestoreTableCreator,
+  singlestoreTableWithSchema
 };
 //# sourceMappingURL=table.js.map
