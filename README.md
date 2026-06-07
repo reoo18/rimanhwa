@@ -1,208 +1,95 @@
-<p align="center">
-  <img src="logo.svg" width="200px" align="center" alt="Zod logo" />
-  <h1 align="center">Zod</h1>
-  <p align="center">
-    TypeScript-first schema validation with static type inference
-    <br/>
-    by <a href="https://x.com/colinhacks">@colinhacks</a>
-  </p>
-</p>
-<br/>
+# node-postgres
 
-<p align="center">
-<a href="https://github.com/colinhacks/zod/actions?query=branch%3Amaster"><img src="https://github.com/colinhacks/zod/actions/workflows/test.yml/badge.svg?event=push&branch=master" alt="Zod CI status" /></a>
-<a href="https://opensource.org/licenses/MIT" rel="nofollow"><img src="https://img.shields.io/github/license/colinhacks/zod" alt="License"></a>
-<a href="https://www.npmjs.com/package/zod" rel="nofollow"><img src="https://img.shields.io/npm/dw/zod.svg" alt="npm"></a>
-<a href="https://discord.gg/KaSRdyX2vc" rel="nofollow"><img src="https://img.shields.io/discord/893487829802418277?label=Discord&logo=discord&logoColor=white" alt="discord server"></a>
-<a href="https://github.com/colinhacks/zod" rel="nofollow"><img src="https://img.shields.io/github/stars/colinhacks/zod" alt="stars"></a>
-</p>
+[![Build Status](https://secure.travis-ci.org/brianc/node-postgres.svg?branch=master)](http://travis-ci.org/brianc/node-postgres)
+<span class="badge-npmversion"><a href="https://npmjs.org/package/pg" title="View this project on NPM"><img src="https://img.shields.io/npm/v/pg.svg" alt="NPM version" /></a></span>
+<span class="badge-npmdownloads"><a href="https://npmjs.org/package/pg" title="View this project on NPM"><img src="https://img.shields.io/npm/dm/pg.svg" alt="NPM downloads" /></a></span>
 
-<div align="center">
-  <a href="https://zod.dev/api">Docs</a>
-  <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
-  <a href="https://discord.gg/RcG33DQJdf">Discord</a>
-  <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
-  <a href="https://twitter.com/colinhacks">𝕏</a>
-  <span>&nbsp;&nbsp;•&nbsp;&nbsp;</span>
-  <a href="https://bsky.app/profile/zod.dev">Bluesky</a>
-  <br />
-</div>
+Non-blocking PostgreSQL client for Node.js. Pure JavaScript and optional native libpq bindings.
 
-<br/>
-<br/>
-
-<h2 align="center">Featured sponsor: Jazz</h2>
-
-<div align="center">
-  <a href="https://jazz.tools/?utm_source=zod">
-    <picture width="85%" >
-      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/garden-co/jazz/938f6767e46cdfded60e50d99bf3b533f4809c68/homepage/homepage/public/Zod%20sponsor%20message.png">
-      <img alt="jazz logo" src="https://raw.githubusercontent.com/garden-co/jazz/938f6767e46cdfded60e50d99bf3b533f4809c68/homepage/homepage/public/Zod%20sponsor%20message.png" width="85%">
-    </picture>
-  </a>
-  <br/>
-  <p><sub>Learn more about <a target="_blank" rel="noopener noreferrer" href="mailto:sponsorship@colinhacks.com">featured sponsorships</a></sub></p>
-</div>
-
-<br/>
-<br/>
-<br/>
-
-### [Read the docs →](https://zod.dev/api)
-
-<br/>
-<br/>
-
-## What is Zod?
-
-Zod is a TypeScript-first validation library. Define a schema and parse some data with it. You'll get back a strongly typed, validated result.
-
-```ts
-import * as z from "zod/v4";
-
-const User = z.object({
-  name: z.string(),
-});
-
-// some untrusted data...
-const input = {
-  /* stuff */
-};
-
-// the parsed result is validated and type safe!
-const data = User.parse(input);
-
-// so you can use it with confidence :)
-console.log(data.name);
-```
-
-<br/>
-
-## Features
-
-- Zero external dependencies
-- Works in Node.js and all modern browsers
-- Tiny: `2kb` core bundle (gzipped)
-- Immutable API: methods return a new instance
-- Concise interface
-- Works with TypeScript and plain JS
-- Built-in JSON Schema conversion
-- Extensive ecosystem
-
-<br/>
-
-## Installation
+## Install
 
 ```sh
-npm install zod
+$ npm install pg
 ```
 
-<br/>
+---
 
-## Basic usage
+## :star: [Documentation](https://node-postgres.com) :star:
 
-Before you can do anything else, you need to define a schema. For the purposes of this guide, we'll use a simple object schema.
+### Features
 
-```ts
-import * as z from "zod/v4";
+- Pure JavaScript client and native libpq bindings share _the same API_
+- Connection pooling
+- Extensible JS ↔ PostgreSQL data-type coercion
+- Supported PostgreSQL features
+  - Parameterized queries
+  - Named statements with query plan caching
+  - Async notifications with `LISTEN/NOTIFY`
+  - Bulk import & export with `COPY TO/COPY FROM`
 
-const Player = z.object({
-  username: z.string(),
-  xp: z.number(),
-});
-```
+### Extras
 
-### Parsing data
+node-postgres is by design pretty light on abstractions. These are some handy modules we've been using over the years to complete the picture.
+The entire list can be found on our [wiki](https://github.com/brianc/node-postgres/wiki/Extras).
 
-Given any Zod schema, use `.parse` to validate an input. If it's valid, Zod returns a strongly-typed _deep clone_ of the input.
+## Support
 
-```ts
-Player.parse({ username: "billie", xp: 100 });
-// => returns { username: "billie", xp: 100 }
-```
+node-postgres is free software. If you encounter a bug with the library please open an issue on the [GitHub repo](https://github.com/brianc/node-postgres). If you have questions unanswered by the documentation please open an issue pointing out how the documentation was unclear & I will do my best to make it better!
 
-**Note** — If your schema uses certain asynchronous APIs like `async` [refinements](#refine) or [transforms](#transform), you'll need to use the `.parseAsync()` method instead.
+When you open an issue please provide:
 
-```ts
-const schema = z.string().refine(async (val) => val.length <= 8);
+- version of Node
+- version of Postgres
+- smallest possible snippet of code to reproduce the problem
 
-await schema.parseAsync("hello");
-// => "hello"
-```
+You can also follow me [@briancarlson](https://twitter.com/briancarlson) if that's your thing. I try to always announce noteworthy changes & developments with node-postgres on Twitter.
 
-### Handling errors
+## Sponsorship :two_hearts:
 
-When validation fails, the `.parse()` method will throw a `ZodError` instance with granular information about the validation issues.
+node-postgres's continued development has been made possible in part by generous financial support from [the community](https://github.com/brianc/node-postgres/blob/master/SPONSORS.md).
 
-```ts
-try {
-  Player.parse({ username: 42, xp: "100" });
-} catch (err) {
-  if (err instanceof z.ZodError) {
-    err.issues;
-    /* [
-      {
-        expected: 'string',
-        code: 'invalid_type',
-        path: [ 'username' ],
-        message: 'Invalid input: expected string'
-      },
-      {
-        expected: 'number',
-        code: 'invalid_type',
-        path: [ 'xp' ],
-        message: 'Invalid input: expected number'
-      }
-    ] */
-  }
-}
-```
+If you or your company are benefiting from node-postgres and would like to help keep the project financially sustainable [please consider supporting](https://github.com/sponsors/brianc) its development.
 
-To avoid a `try/catch` block, you can use the `.safeParse()` method to get back a plain result object containing either the successfully parsed data or a `ZodError`. The result type is a [discriminated union](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#discriminated-unions), so you can handle both cases conveniently.
+### Featured sponsor
 
-```ts
-const result = Player.safeParse({ username: 42, xp: "100" });
-if (!result.success) {
-  result.error; // ZodError instance
-} else {
-  result.data; // { username: string; xp: number }
-}
-```
+Special thanks to [medplum](https://medplum.com) for their generous and thoughtful support of node-postgres!
 
-**Note** — If your schema uses certain asynchronous APIs like `async` [refinements](#refine) or [transforms](#transform), you'll need to use the `.safeParseAsync()` method instead.
+![medplum](https://raw.githubusercontent.com/medplum/medplum-logo/refs/heads/main/medplum-logo.png)
 
-```ts
-const schema = z.string().refine(async (val) => val.length <= 8);
+## Contributing
 
-await schema.safeParseAsync("hello");
-// => { success: true; data: "hello" }
-```
+**:heart: contributions!**
 
-### Inferring types
+I will **happily** accept your pull request if it:
 
-Zod infers a static type from your schema definitions. You can extract this type with the `z.infer<>` utility and use it however you like.
+- **has tests**
+- looks reasonable
+- does not break backwards compatibility
 
-```ts
-const Player = z.object({
-  username: z.string(),
-  xp: z.number(),
-});
+If your change involves breaking backwards compatibility please please point that out in the pull request & we can discuss & plan when and how to release it and what type of documentation or communicate it will require.
 
-// extract the inferred type
-type Player = z.infer<typeof Player>;
+## Troubleshooting and FAQ
 
-// use it in your code
-const player: Player = { username: "billie", xp: 100 };
-```
+The causes and solutions to common errors can be found among the [Frequently Asked Questions (FAQ)](https://github.com/brianc/node-postgres/wiki/FAQ)
 
-In some cases, the input & output types of a schema can diverge. For instance, the `.transform()` API can convert the input from one type to another. In these cases, you can extract the input and output types independently:
+## License
 
-```ts
-const mySchema = z.string().transform((val) => val.length);
+Copyright (c) 2010-2020 Brian Carlson (brian.m.carlson@gmail.com)
 
-type MySchemaIn = z.input<typeof mySchema>;
-// => string
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-type MySchemaOut = z.output<typeof mySchema>; // equivalent to z.infer<typeof mySchema>
-// number
-```
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

@@ -1,118 +1,76 @@
 {
-  "name": "zod",
-  "version": "3.25.76",
-  "type": "module",
-  "author": "Colin McDonnell <zod@colinhacks.com>",
-  "description": "TypeScript-first schema declaration and validation library with static type inference",
-  "files": [
-    "src",
-    "**/*.js",
-    "**/*.mjs",
-    "**/*.cjs",
-    "**/*.d.ts",
-    "**/*.d.mts",
-    "**/*.d.cts"
-  ],
-  "funding": "https://github.com/sponsors/colinhacks",
-  "homepage": "https://zod.dev",
+  "name": "pg",
+  "version": "8.20.0",
+  "description": "PostgreSQL client - pure javascript & libpq with the same API",
   "keywords": [
-    "typescript",
-    "schema",
-    "validation",
-    "type",
-    "inference"
+    "database",
+    "libpq",
+    "pg",
+    "postgre",
+    "postgres",
+    "postgresql",
+    "rdbms"
   ],
-  "license": "MIT",
-  "sideEffects": false,
-  "main": "./index.cjs",
-  "types": "./index.d.cts",
-  "module": "./index.js",
-  "zshy": {
-    "exports": {
-      "./package.json": "./package.json",
-      ".": "./src/index.ts",
-      "./v3": "./src/v3/index.ts",
-      "./v4": "./src/v4/index.ts",
-      "./v4-mini": "./src/v4-mini/index.ts",
-      "./v4/mini": "./src/v4/mini/index.ts",
-      "./v4/core": "./src/v4/core/index.ts",
-      "./v4/locales": "./src/v4/locales/index.ts",
-      "./v4/locales/*": "./src/v4/locales/*"
-    },
-    "sourceDialects": [
-      "@zod/source"
-    ]
-  },
-  "exports": {
-    "./package.json": "./package.json",
-    ".": {
-      "@zod/source": "./src/index.ts",
-      "types": "./index.d.cts",
-      "import": "./index.js",
-      "require": "./index.cjs"
-    },
-    "./v3": {
-      "@zod/source": "./src/v3/index.ts",
-      "types": "./v3/index.d.cts",
-      "import": "./v3/index.js",
-      "require": "./v3/index.cjs"
-    },
-    "./v4": {
-      "@zod/source": "./src/v4/index.ts",
-      "types": "./v4/index.d.cts",
-      "import": "./v4/index.js",
-      "require": "./v4/index.cjs"
-    },
-    "./v4-mini": {
-      "@zod/source": "./src/v4-mini/index.ts",
-      "types": "./v4-mini/index.d.cts",
-      "import": "./v4-mini/index.js",
-      "require": "./v4-mini/index.cjs"
-    },
-    "./v4/mini": {
-      "@zod/source": "./src/v4/mini/index.ts",
-      "types": "./v4/mini/index.d.cts",
-      "import": "./v4/mini/index.js",
-      "require": "./v4/mini/index.cjs"
-    },
-    "./v4/core": {
-      "@zod/source": "./src/v4/core/index.ts",
-      "types": "./v4/core/index.d.cts",
-      "import": "./v4/core/index.js",
-      "require": "./v4/core/index.cjs"
-    },
-    "./v4/locales": {
-      "@zod/source": "./src/v4/locales/index.ts",
-      "types": "./v4/locales/index.d.cts",
-      "import": "./v4/locales/index.js",
-      "require": "./v4/locales/index.cjs"
-    },
-    "./v4/locales/*": {
-      "@zod/source": "./src/v4/locales/*",
-      "types": "./v4/locales/*",
-      "import": "./v4/locales/*",
-      "require": "./v4/locales/*"
-    }
-  },
+  "homepage": "https://github.com/brianc/node-postgres",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/colinhacks/zod.git"
+    "url": "git://github.com/brianc/node-postgres.git",
+    "directory": "packages/pg"
   },
-  "bugs": {
-    "url": "https://github.com/colinhacks/zod/issues"
+  "author": "Brian Carlson <brian.m.carlson@gmail.com>",
+  "main": "./lib",
+  "exports": {
+    ".": {
+      "import": "./esm/index.mjs",
+      "require": "./lib/index.js",
+      "default": "./lib/index.js"
+    },
+    "./package.json": {
+      "default": "./package.json"
+    },
+    "./lib/*": "./lib/*.js",
+    "./lib/*.js": "./lib/*.js"
   },
-  "support": {
-    "backing": {
-      "npm-funding": true
+  "dependencies": {
+    "pg-connection-string": "^2.12.0",
+    "pg-pool": "^3.13.0",
+    "pg-protocol": "^1.13.0",
+    "pg-types": "2.2.0",
+    "pgpass": "1.0.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.8.23",
+    "@cloudflare/workers-types": "^4.20230404.0",
+    "async": "2.6.4",
+    "bluebird": "3.7.2",
+    "co": "4.6.0",
+    "pg-copy-streams": "0.3.0",
+    "typescript": "^4.0.3",
+    "vitest": "~3.0.9",
+    "wrangler": "^3.x"
+  },
+  "optionalDependencies": {
+    "pg-cloudflare": "^1.3.0"
+  },
+  "peerDependencies": {
+    "pg-native": ">=3.0.1"
+  },
+  "peerDependenciesMeta": {
+    "pg-native": {
+      "optional": true
     }
   },
   "scripts": {
-    "clean": "git clean -xdf . -e node_modules",
-    "build": "zshy --project tsconfig.build.json",
-    "postbuild": "pnpm biome check --write .",
-    "test:watch": "pnpm vitest",
-    "test": "pnpm vitest run",
-    "bump:beta": "pnpm version \"v$(pnpm pkg get version | jq -r)-beta.$(date +%Y%m%dT%H%M%S)\"",
-    "pub:beta": "pnpm bump:beta && pnpm publish --tag next --publish-branch v4 --no-git-checks --dry-run"
-  }
+    "test": "make test-all"
+  },
+  "files": [
+    "lib",
+    "esm",
+    "SPONSORS.md"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 16.0.0"
+  },
+  "gitHead": "c9070cc8d526fca65780cedc25c1966b57cf7532"
 }
