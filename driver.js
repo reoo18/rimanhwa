@@ -1,42 +1,26 @@
-import { entityKind } from "../entity.js";
-import { DefaultLogger } from "../logger.js";
-import {
-  createTableRelationsHelpers,
-  extractTablesRelationalConfig
-} from "../relations.js";
-import { SingleStoreDatabase } from "../singlestore-core/db.js";
-import { SingleStoreDialect } from "../singlestore-core/dialect.js";
-import {
-  SingleStoreRemoteSession
-} from "./session.js";
-class SingleStoreRemoteDatabase extends SingleStoreDatabase {
-  static [entityKind] = "SingleStoreRemoteDatabase";
-}
-function drizzle(callback, config = {}) {
-  const dialect = new SingleStoreDialect({ casing: config.casing });
+import { Prisma } from "@prisma/client";
+import { DefaultLogger } from "../../logger.js";
+import { BaseSQLiteDatabase, SQLiteAsyncDialect } from "../../sqlite-core/index.js";
+import { PrismaSQLiteSession } from "./session.js";
+function drizzle(config = {}) {
+  const dialect = new SQLiteAsyncDialect();
   let logger;
   if (config.logger === true) {
     logger = new DefaultLogger();
   } else if (config.logger !== false) {
     logger = config.logger;
   }
-  let schema;
-  if (config.schema) {
-    const tablesConfig = extractTablesRelationalConfig(
-      config.schema,
-      createTableRelationsHelpers
-    );
-    schema = {
-      fullSchema: config.schema,
-      schema: tablesConfig.tables,
-      tableNamesMap: tablesConfig.tableNamesMap
-    };
-  }
-  const session = new SingleStoreRemoteSession(callback, dialect, schema, { logger });
-  return new SingleStoreRemoteDatabase(dialect, session, schema);
+  return Prisma.defineExtension((client) => {
+    const session = new PrismaSQLiteSession(client, dialect, { logger });
+    return client.$extends({
+      name: "drizzle",
+      client: {
+        $drizzle: new BaseSQLiteDatabase("async", dialect, session, void 0)
+      }
+    });
+  });
 }
 export {
-  SingleStoreRemoteDatabase,
   drizzle
 };
 //# sourceMappingURL=driver.js.map

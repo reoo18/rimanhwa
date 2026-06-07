@@ -1,78 +1,37 @@
-import { type Cache } from "../cache/core/cache.js";
-import type { WithCacheConfig } from "../cache/core/types.js";
-import { entityKind } from "../entity.js";
-import type { RelationalSchemaConfig, TablesRelationalConfig } from "../relations.js";
-import { type Query, type SQL } from "../sql/sql.js";
-import type { Assume, Equal } from "../utils.js";
-import { SingleStoreDatabase } from "./db.js";
-import type { SingleStoreDialect } from "./dialect.js";
-import type { SelectedFieldsOrdered } from "./query-builders/select.types.js";
-export interface SingleStoreQueryResultHKT {
-    readonly $brand: 'SingleStoreQueryResultHKT';
-    readonly row: unknown;
-    readonly type: unknown;
-}
-export interface AnySingleStoreQueryResultHKT extends SingleStoreQueryResultHKT {
-    readonly type: any;
-}
-export type SingleStoreQueryResultKind<TKind extends SingleStoreQueryResultHKT, TRow> = (TKind & {
-    readonly row: TRow;
-})['type'];
-export interface SingleStorePreparedQueryConfig {
-    execute: unknown;
-    iterator: unknown;
-}
-export interface SingleStorePreparedQueryHKT {
-    readonly $brand: 'SingleStorePreparedQueryHKT';
-    readonly config: unknown;
-    readonly type: unknown;
-}
-export type PreparedQueryKind<TKind extends SingleStorePreparedQueryHKT, TConfig extends SingleStorePreparedQueryConfig, TAssume extends boolean = false> = Equal<TAssume, true> extends true ? Assume<(TKind & {
-    readonly config: TConfig;
-})['type'], SingleStorePreparedQuery<TConfig>> : (TKind & {
-    readonly config: TConfig;
-})['type'];
-export declare abstract class SingleStorePreparedQuery<T extends SingleStorePreparedQueryConfig> {
-    private cache?;
-    private queryMetadata?;
-    private cacheConfig?;
+import type { PrismaClient } from '@prisma/client/extension';
+import { entityKind } from "../../entity.js";
+import { type Logger } from "../../logger.js";
+import type { Query } from "../../sql/sql.js";
+import type { PreparedQueryConfig as PreparedQueryConfigBase, SelectedFieldsOrdered, SQLiteAsyncDialect, SQLiteExecuteMethod, SQLiteTransaction, SQLiteTransactionConfig } from "../../sqlite-core/index.js";
+import { SQLitePreparedQuery, SQLiteSession } from "../../sqlite-core/index.js";
+type PreparedQueryConfig = Omit<PreparedQueryConfigBase, 'statement' | 'run'>;
+export declare class PrismaSQLitePreparedQuery<T extends PreparedQueryConfig = PreparedQueryConfig> extends SQLitePreparedQuery<{
+    type: 'async';
+    run: [];
+    all: T['all'];
+    get: T['get'];
+    values: never;
+    execute: T['execute'];
+}> {
+    private readonly prisma;
+    private readonly logger;
     static readonly [entityKind]: string;
-    constructor(cache?: Cache | undefined, queryMetadata?: {
-        type: 'select' | 'update' | 'delete' | 'insert';
-        tables: string[];
-    } | undefined, cacheConfig?: WithCacheConfig | undefined);
-    abstract execute(placeholderValues?: Record<string, unknown>): Promise<T['execute']>;
-    abstract iterator(placeholderValues?: Record<string, unknown>): AsyncGenerator<T['iterator']>;
+    constructor(prisma: PrismaClient, query: Query, logger: Logger, executeMethod: SQLiteExecuteMethod);
+    all(placeholderValues?: Record<string, unknown>): Promise<T['all']>;
+    run(placeholderValues?: Record<string, unknown> | undefined): Promise<[]>;
+    get(placeholderValues?: Record<string, unknown> | undefined): Promise<T['get']>;
+    values(_placeholderValues?: Record<string, unknown> | undefined): Promise<never>;
+    isResponseInArrayMode(): boolean;
 }
-export interface SingleStoreTransactionConfig {
-    withConsistentSnapshot?: boolean;
-    accessMode?: 'read only' | 'read write';
-    isolationLevel: 'read committed';
+export interface PrismaSQLiteSessionOptions {
+    logger?: Logger;
 }
-export declare abstract class SingleStoreSession<TQueryResult extends SingleStoreQueryResultHKT = SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase = PreparedQueryHKTBase, TFullSchema extends Record<string, unknown> = Record<string, never>, TSchema extends TablesRelationalConfig = Record<string, never>> {
-    protected dialect: SingleStoreDialect;
+export declare class PrismaSQLiteSession extends SQLiteSession<'async', unknown, Record<string, never>, Record<string, never>> {
+    private readonly prisma;
     static readonly [entityKind]: string;
-    constructor(dialect: SingleStoreDialect);
-    abstract prepareQuery<T extends SingleStorePreparedQueryConfig, TPreparedQueryHKT extends SingleStorePreparedQueryHKT>(query: Query, fields: SelectedFieldsOrdered | undefined, customResultMapper?: (rows: unknown[][]) => T['execute'], generatedIds?: Record<string, unknown>[], returningIds?: SelectedFieldsOrdered, queryMetadata?: {
-        type: 'select' | 'update' | 'delete' | 'insert';
-        tables: string[];
-    }, cacheConfig?: WithCacheConfig): PreparedQueryKind<TPreparedQueryHKT, T>;
-    execute<T>(query: SQL): Promise<T>;
-    abstract all<T = unknown>(query: SQL): Promise<T[]>;
-    count(sql: SQL): Promise<number>;
-    abstract transaction<T>(transaction: (tx: SingleStoreTransaction<TQueryResult, TPreparedQueryHKT, TFullSchema, TSchema>) => Promise<T>, config?: SingleStoreTransactionConfig): Promise<T>;
-    protected getSetTransactionSQL(config: SingleStoreTransactionConfig): SQL | undefined;
-    protected getStartTransactionSQL(config: SingleStoreTransactionConfig): SQL | undefined;
+    private readonly logger;
+    constructor(prisma: PrismaClient, dialect: SQLiteAsyncDialect, options: PrismaSQLiteSessionOptions);
+    prepareQuery<T extends Omit<PreparedQueryConfig, 'run'>>(query: Query, fields: SelectedFieldsOrdered | undefined, executeMethod: SQLiteExecuteMethod): PrismaSQLitePreparedQuery<T>;
+    transaction<T>(_transaction: (tx: SQLiteTransaction<'async', unknown, Record<string, never>, Record<string, never>>) => Promise<T>, _config?: SQLiteTransactionConfig): Promise<T>;
 }
-export declare abstract class SingleStoreTransaction<TQueryResult extends SingleStoreQueryResultHKT, TPreparedQueryHKT extends PreparedQueryHKTBase, TFullSchema extends Record<string, unknown> = Record<string, never>, TSchema extends TablesRelationalConfig = Record<string, never>> extends SingleStoreDatabase<TQueryResult, TPreparedQueryHKT, TFullSchema, TSchema> {
-    protected schema: RelationalSchemaConfig<TSchema> | undefined;
-    protected readonly nestedIndex: number;
-    static readonly [entityKind]: string;
-    constructor(dialect: SingleStoreDialect, session: SingleStoreSession, schema: RelationalSchemaConfig<TSchema> | undefined, nestedIndex: number);
-    rollback(): never;
-    /** Nested transactions (aka savepoints) only work with InnoDB engine. */
-    abstract transaction<T>(transaction: (tx: SingleStoreTransaction<TQueryResult, TPreparedQueryHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;
-}
-export interface PreparedQueryHKTBase extends SingleStorePreparedQueryHKT {
-    type: SingleStorePreparedQuery<Assume<this['config'], SingleStorePreparedQueryConfig>>;
-}
+export {};

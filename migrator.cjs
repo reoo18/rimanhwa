@@ -22,36 +22,9 @@ __export(migrator_exports, {
 });
 module.exports = __toCommonJS(migrator_exports);
 var import_migrator = require("../migrator.cjs");
-var import_sql = require("../sql/sql.cjs");
-async function migrate(db, callback, config) {
+async function migrate(db, config) {
   const migrations = (0, import_migrator.readMigrationFiles)(config);
-  const migrationsTable = config.migrationsTable ?? "__drizzle_migrations";
-  const migrationTableCreate = import_sql.sql`
-		create table if not exists ${import_sql.sql.identifier(migrationsTable)} (
-			id serial primary key,
-			hash text not null,
-			created_at bigint
-		)
-	`;
-  await db.execute(migrationTableCreate);
-  const dbMigrations = await db.select({
-    id: import_sql.sql.raw("id"),
-    hash: import_sql.sql.raw("hash"),
-    created_at: import_sql.sql.raw("created_at")
-  }).from(import_sql.sql.identifier(migrationsTable).getSQL()).orderBy(
-    import_sql.sql.raw("created_at desc")
-  ).limit(1);
-  const lastDbMigration = dbMigrations[0];
-  const queriesToRun = [];
-  for (const migration of migrations) {
-    if (!lastDbMigration || Number(lastDbMigration.created_at) < migration.folderMillis) {
-      queriesToRun.push(
-        ...migration.sql,
-        `insert into ${import_sql.sql.identifier(migrationsTable).value} (\`hash\`, \`created_at\`) values('${migration.hash}', '${migration.folderMillis}')`
-      );
-    }
-  }
-  await callback(queriesToRun);
+  await db.dialect.migrate(migrations, db.session, config);
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

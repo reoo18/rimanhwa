@@ -18,86 +18,19 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var query_builder_exports = {};
 __export(query_builder_exports, {
-  QueryBuilder: () => QueryBuilder
+  TypedQueryBuilder: () => TypedQueryBuilder
 });
 module.exports = __toCommonJS(query_builder_exports);
-var import_entity = require("../../entity.cjs");
-var import_selection_proxy = require("../../selection-proxy.cjs");
-var import_dialect = require("../dialect.cjs");
-var import_subquery = require("../../subquery.cjs");
-var import_select = require("./select.cjs");
-class QueryBuilder {
-  static [import_entity.entityKind] = "SingleStoreQueryBuilder";
-  dialect;
-  dialectConfig;
-  constructor(dialect) {
-    this.dialect = (0, import_entity.is)(dialect, import_dialect.SingleStoreDialect) ? dialect : void 0;
-    this.dialectConfig = (0, import_entity.is)(dialect, import_dialect.SingleStoreDialect) ? void 0 : dialect;
-  }
-  $with = (alias, selection) => {
-    const queryBuilder = this;
-    const as = (qb) => {
-      if (typeof qb === "function") {
-        qb = qb(queryBuilder);
-      }
-      return new Proxy(
-        new import_subquery.WithSubquery(
-          qb.getSQL(),
-          selection ?? ("getSelectedFields" in qb ? qb.getSelectedFields() ?? {} : {}),
-          alias,
-          true
-        ),
-        new import_selection_proxy.SelectionProxyHandler({ alias, sqlAliasedBehavior: "alias", sqlBehavior: "error" })
-      );
-    };
-    return { as };
-  };
-  with(...queries) {
-    const self = this;
-    function select(fields) {
-      return new import_select.SingleStoreSelectBuilder({
-        fields: fields ?? void 0,
-        session: void 0,
-        dialect: self.getDialect(),
-        withList: queries
-      });
-    }
-    function selectDistinct(fields) {
-      return new import_select.SingleStoreSelectBuilder({
-        fields: fields ?? void 0,
-        session: void 0,
-        dialect: self.getDialect(),
-        withList: queries,
-        distinct: true
-      });
-    }
-    return { select, selectDistinct };
-  }
-  select(fields) {
-    return new import_select.SingleStoreSelectBuilder({
-      fields: fields ?? void 0,
-      session: void 0,
-      dialect: this.getDialect()
-    });
-  }
-  selectDistinct(fields) {
-    return new import_select.SingleStoreSelectBuilder({
-      fields: fields ?? void 0,
-      session: void 0,
-      dialect: this.getDialect(),
-      distinct: true
-    });
-  }
-  // Lazy load dialect to avoid circular dependency
-  getDialect() {
-    if (!this.dialect) {
-      this.dialect = new import_dialect.SingleStoreDialect(this.dialectConfig);
-    }
-    return this.dialect;
+var import_entity = require("../entity.cjs");
+class TypedQueryBuilder {
+  static [import_entity.entityKind] = "TypedQueryBuilder";
+  /** @internal */
+  getSelectedFields() {
+    return this._.selectedFields;
   }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  QueryBuilder
+  TypedQueryBuilder
 });
 //# sourceMappingURL=query-builder.cjs.map

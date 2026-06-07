@@ -18,45 +18,33 @@ var __copyProps = (to, from, except, desc) => {
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var driver_exports = {};
 __export(driver_exports, {
-  SingleStoreRemoteDatabase: () => SingleStoreRemoteDatabase,
   drizzle: () => drizzle
 });
 module.exports = __toCommonJS(driver_exports);
-var import_entity = require("../entity.cjs");
-var import_logger = require("../logger.cjs");
-var import_relations = require("../relations.cjs");
-var import_db = require("../singlestore-core/db.cjs");
-var import_dialect = require("../singlestore-core/dialect.cjs");
+var import_client = require("@prisma/client");
+var import_logger = require("../../logger.cjs");
+var import_sqlite_core = require("../../sqlite-core/index.cjs");
 var import_session = require("./session.cjs");
-class SingleStoreRemoteDatabase extends import_db.SingleStoreDatabase {
-  static [import_entity.entityKind] = "SingleStoreRemoteDatabase";
-}
-function drizzle(callback, config = {}) {
-  const dialect = new import_dialect.SingleStoreDialect({ casing: config.casing });
+function drizzle(config = {}) {
+  const dialect = new import_sqlite_core.SQLiteAsyncDialect();
   let logger;
   if (config.logger === true) {
     logger = new import_logger.DefaultLogger();
   } else if (config.logger !== false) {
     logger = config.logger;
   }
-  let schema;
-  if (config.schema) {
-    const tablesConfig = (0, import_relations.extractTablesRelationalConfig)(
-      config.schema,
-      import_relations.createTableRelationsHelpers
-    );
-    schema = {
-      fullSchema: config.schema,
-      schema: tablesConfig.tables,
-      tableNamesMap: tablesConfig.tableNamesMap
-    };
-  }
-  const session = new import_session.SingleStoreRemoteSession(callback, dialect, schema, { logger });
-  return new SingleStoreRemoteDatabase(dialect, session, schema);
+  return import_client.Prisma.defineExtension((client) => {
+    const session = new import_session.PrismaSQLiteSession(client, dialect, { logger });
+    return client.$extends({
+      name: "drizzle",
+      client: {
+        $drizzle: new import_sqlite_core.BaseSQLiteDatabase("async", dialect, session, void 0)
+      }
+    });
+  });
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SingleStoreRemoteDatabase,
   drizzle
 });
 //# sourceMappingURL=driver.cjs.map

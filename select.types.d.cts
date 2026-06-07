@@ -1,137 +1,58 @@
-import type { SelectedFields as SelectedFieldsBase, SelectedFieldsFlat as SelectedFieldsFlatBase, SelectedFieldsOrdered as SelectedFieldsOrderedBase } from "../../operations.cjs";
-import type { TypedQueryBuilder } from "../../query-builders/query-builder.cjs";
-import type { AppendToNullabilityMap, AppendToResult, BuildSubquerySelection, GetSelectTableName, JoinNullability, JoinType, MapColumnsToTableAlias, SelectMode, SelectResult, SetOperator } from "../../query-builders/select.types.cjs";
-import type { SingleStoreColumn } from "../columns/index.cjs";
-import type { SingleStoreTable, SingleStoreTableWithColumns } from "../table.cjs";
-import type { ColumnsSelection, Placeholder, SQL, View } from "../../sql/sql.cjs";
-import type { Subquery } from "../../subquery.cjs";
-import type { Table, UpdateTableConfig } from "../../table.cjs";
-import type { Assume, ValidateShape } from "../../utils.cjs";
-import type { PreparedQueryHKTBase, PreparedQueryKind, SingleStorePreparedQueryConfig } from "../session.cjs";
-import type { SingleStoreSelectBase, SingleStoreSelectQueryBuilderBase } from "./select.cjs";
-export interface SingleStoreSelectJoinConfig {
-    on: SQL | undefined;
-    table: SingleStoreTable | Subquery | SQL;
-    alias: string | undefined;
-    joinType: JoinType;
-    lateral?: boolean;
-}
-export type BuildAliasTable<TTable extends SingleStoreTable | View, TAlias extends string> = TTable extends Table ? SingleStoreTableWithColumns<UpdateTableConfig<TTable['_']['config'], {
-    name: TAlias;
-    columns: MapColumnsToTableAlias<TTable['_']['columns'], TAlias, 'singlestore'>;
-}>> : never;
-export interface SingleStoreSelectConfig {
-    withList?: Subquery[];
-    fields: Record<string, unknown>;
-    fieldsFlat?: SelectedFieldsOrdered;
-    where?: SQL;
-    having?: SQL;
-    table: SingleStoreTable | Subquery | SQL;
-    limit?: number | Placeholder;
-    offset?: number | Placeholder;
-    joins?: SingleStoreSelectJoinConfig[];
-    orderBy?: (SingleStoreColumn | SQL | SQL.Aliased)[];
-    groupBy?: (SingleStoreColumn | SQL | SQL.Aliased)[];
-    lockingClause?: {
-        strength: LockStrength;
-        config: LockConfig;
-    };
-    distinct?: boolean;
-    setOperators: {
-        rightSelect: TypedQueryBuilder<any, any>;
-        type: SetOperator;
-        isAll: boolean;
-        orderBy?: (SingleStoreColumn | SQL | SQL.Aliased)[];
-        limit?: number | Placeholder;
-        offset?: number | Placeholder;
-    }[];
-}
-export type SingleStoreJoin<T extends AnySingleStoreSelectQueryBuilder, TDynamic extends boolean, TJoinType extends JoinType, TJoinedTable extends SingleStoreTable | Subquery | SQL, // | SingleStoreViewBase
-TJoinedName extends GetSelectTableName<TJoinedTable> = GetSelectTableName<TJoinedTable>> = T extends any ? SingleStoreSelectWithout<SingleStoreSelectKind<T['_']['hkt'], T['_']['tableName'], AppendToResult<T['_']['tableName'], T['_']['selection'], TJoinedName, TJoinedTable extends SingleStoreTable ? TJoinedTable['_']['columns'] : TJoinedTable extends Subquery ? Assume<TJoinedTable['_']['selectedFields'], SelectedFields> : never, T['_']['selectMode']>, T['_']['selectMode'] extends 'partial' ? T['_']['selectMode'] : 'multiple', T['_']['preparedQueryHKT'], AppendToNullabilityMap<T['_']['nullabilityMap'], TJoinedName, TJoinType>, TDynamic, T['_']['excludedMethods']>, TDynamic, T['_']['excludedMethods']> : never;
-export type SingleStoreJoinFn<T extends AnySingleStoreSelectQueryBuilder, TDynamic extends boolean, TJoinType extends JoinType, TIsLateral extends boolean> = <TJoinedTable extends (TIsLateral extends true ? Subquery | SQL : SingleStoreTable | Subquery | SQL), TJoinedName extends GetSelectTableName<TJoinedTable> = GetSelectTableName<TJoinedTable>>(table: TJoinedTable, on: ((aliases: T['_']['selection']) => SQL | undefined) | SQL | undefined) => SingleStoreJoin<T, TDynamic, TJoinType, TJoinedTable, TJoinedName>;
-export type SingleStoreCrossJoinFn<T extends AnySingleStoreSelectQueryBuilder, TDynamic extends boolean, TIsLateral extends boolean> = <TJoinedTable extends (TIsLateral extends true ? Subquery | SQL : SingleStoreTable | Subquery | SQL), TJoinedName extends GetSelectTableName<TJoinedTable> = GetSelectTableName<TJoinedTable>>(table: TJoinedTable) => SingleStoreJoin<T, TDynamic, 'cross', TJoinedTable, TJoinedName>;
-export type SelectedFieldsFlat = SelectedFieldsFlatBase<SingleStoreColumn>;
-export type SelectedFields = SelectedFieldsBase<SingleStoreColumn, SingleStoreTable>;
-export type SelectedFieldsOrdered = SelectedFieldsOrderedBase<SingleStoreColumn>;
-export type LockStrength = 'update' | 'share';
-export type LockConfig = {
-    noWait: true;
-    skipLocked?: undefined;
-} | {
-    noWait?: undefined;
-    skipLocked: true;
-} | {
-    noWait?: undefined;
-    skipLocked?: undefined;
+import type { ChangeColumnTableName, ColumnDataType, Dialect } from "../column-builder.cjs";
+import type { AnyColumn, Column, ColumnBaseConfig, GetColumnData, UpdateColConfig } from "../column.cjs";
+import type { SelectedFields } from "../operations.cjs";
+import type { ColumnsSelection, SQL, View } from "../sql/sql.cjs";
+import type { Subquery } from "../subquery.cjs";
+import type { Table } from "../table.cjs";
+import type { Assume, DrizzleTypeError, Equal, FromSingleKeyObject, IsAny, IsUnion, Not, Simplify } from "../utils.cjs";
+export type JoinType = 'inner' | 'left' | 'right' | 'full' | 'cross';
+export type JoinNullability = 'nullable' | 'not-null';
+export type ApplyNullability<T, TNullability extends JoinNullability> = TNullability extends 'nullable' ? T | null : TNullability extends 'null' ? null : T;
+export type ApplyNullabilityToColumn<TColumn extends Column, TNullability extends JoinNullability> = TNullability extends 'not-null' ? TColumn : Column<Assume<UpdateColConfig<TColumn['_'], {
+    notNull: TNullability extends 'nullable' ? false : TColumn['_']['notNull'];
+}>, ColumnBaseConfig<ColumnDataType, string>>>;
+export type ApplyNotNullMapToJoins<TResult, TNullabilityMap extends Record<string, JoinNullability>> = {
+    [TTableName in keyof TResult & keyof TNullabilityMap & string]: ApplyNullability<TResult[TTableName], TNullabilityMap[TTableName]>;
+} & {};
+export type SelectMode = 'partial' | 'single' | 'multiple';
+export type SelectResult<TResult, TSelectMode extends SelectMode, TNullabilityMap extends Record<string, JoinNullability>> = TSelectMode extends 'partial' ? SelectPartialResult<TResult, TNullabilityMap> : TSelectMode extends 'single' ? SelectResultFields<TResult> : ApplyNotNullMapToJoins<SelectResultFields<TResult>, TNullabilityMap>;
+type SelectPartialResult<TFields, TNullability extends Record<string, JoinNullability>> = TNullability extends TNullability ? {
+    [Key in keyof TFields]: TFields[Key] extends infer TField ? TField extends Table ? TField['_']['name'] extends keyof TNullability ? ApplyNullability<SelectResultFields<TField['_']['columns']>, TNullability[TField['_']['name']]> : never : TField extends Column ? TField['_']['tableName'] extends keyof TNullability ? ApplyNullability<SelectResultField<TField>, TNullability[TField['_']['tableName']]> : never : TField extends SQL | SQL.Aliased ? SelectResultField<TField> : TField extends Subquery ? FromSingleKeyObject<TField['_']['selectedFields'], TField['_']['selectedFields'] extends {
+        [key: string]: infer TValue;
+    } ? SelectResultField<TValue> : never, 'You can only select one column in the subquery'> : TField extends Record<string, any> ? TField[keyof TField] extends AnyColumn<{
+        tableName: infer TTableName extends string;
+    }> | SQL | SQL.Aliased ? Not<IsUnion<TTableName>> extends true ? ApplyNullability<SelectResultFields<TField>, TNullability[TTableName]> : SelectPartialResult<TField, TNullability> : never : never : never;
+} : never;
+export type MapColumnsToTableAlias<TColumns extends ColumnsSelection, TAlias extends string, TDialect extends Dialect> = {
+    [Key in keyof TColumns]: TColumns[Key] extends Column ? ChangeColumnTableName<Assume<TColumns[Key], Column>, TAlias, TDialect> : TColumns[Key];
+} & {};
+export type AddAliasToSelection<TSelection extends ColumnsSelection, TAlias extends string, TDialect extends Dialect> = Simplify<IsAny<TSelection> extends true ? any : {
+    [Key in keyof TSelection]: TSelection[Key] extends Column ? ChangeColumnTableName<TSelection[Key], TAlias, TDialect> : TSelection[Key] extends Table ? AddAliasToSelection<TSelection[Key]['_']['columns'], TAlias, TDialect> : TSelection[Key] extends SQL | SQL.Aliased ? TSelection[Key] : TSelection[Key] extends ColumnsSelection ? MapColumnsToTableAlias<TSelection[Key], TAlias, TDialect> : never;
+}>;
+export type AppendToResult<TTableName extends string | undefined, TResult, TJoinedName extends string | undefined, TSelectedFields extends SelectedFields<Column, Table>, TOldSelectMode extends SelectMode> = TOldSelectMode extends 'partial' ? TResult : TOldSelectMode extends 'single' ? (TTableName extends string ? Record<TTableName, TResult> : TResult) & (TJoinedName extends string ? Record<TJoinedName, TSelectedFields> : TSelectedFields) : TResult & (TJoinedName extends string ? Record<TJoinedName, TSelectedFields> : TSelectedFields);
+export type BuildSubquerySelection<TSelection extends ColumnsSelection, TNullability extends Record<string, JoinNullability>> = TSelection extends never ? any : {
+    [Key in keyof TSelection]: TSelection[Key] extends SQL ? DrizzleTypeError<'You cannot reference this field without assigning it an alias first - use `.as(<alias>)`'> : TSelection[Key] extends SQL.Aliased ? TSelection[Key] : TSelection[Key] extends Table ? BuildSubquerySelection<TSelection[Key]['_']['columns'], TNullability> : TSelection[Key] extends Column ? ApplyNullabilityToColumn<TSelection[Key], TNullability[TSelection[Key]['_']['tableName']]> : TSelection[Key] extends ColumnsSelection ? BuildSubquerySelection<TSelection[Key], TNullability> : never;
+} & {};
+type SetJoinsNullability<TNullabilityMap extends Record<string, JoinNullability>, TValue extends JoinNullability> = {
+    [Key in keyof TNullabilityMap]: TValue;
 };
-export interface SingleStoreSelectHKTBase {
-    tableName: string | undefined;
-    selection: unknown;
-    selectMode: SelectMode;
-    preparedQueryHKT: unknown;
-    nullabilityMap: unknown;
-    dynamic: boolean;
-    excludedMethods: string;
-    result: unknown;
-    selectedFields: unknown;
-    _type: unknown;
-}
-export type SingleStoreSelectKind<T extends SingleStoreSelectHKTBase, TTableName extends string | undefined, TSelection extends ColumnsSelection, TSelectMode extends SelectMode, TPreparedQueryHKT extends PreparedQueryHKTBase, TNullabilityMap extends Record<string, JoinNullability>, TDynamic extends boolean, TExcludedMethods extends string, TResult = SelectResult<TSelection, TSelectMode, TNullabilityMap>[], TSelectedFields = BuildSubquerySelection<TSelection, TNullabilityMap>> = (T & {
-    tableName: TTableName;
-    selection: TSelection;
-    selectMode: TSelectMode;
-    preparedQueryHKT: TPreparedQueryHKT;
-    nullabilityMap: TNullabilityMap;
-    dynamic: TDynamic;
-    excludedMethods: TExcludedMethods;
-    result: TResult;
-    selectedFields: TSelectedFields;
-})['_type'];
-export interface SingleStoreSelectQueryBuilderHKT extends SingleStoreSelectHKTBase {
-    _type: SingleStoreSelectQueryBuilderBase<SingleStoreSelectQueryBuilderHKT, this['tableName'], Assume<this['selection'], ColumnsSelection>, this['selectMode'], Assume<this['preparedQueryHKT'], PreparedQueryHKTBase>, Assume<this['nullabilityMap'], Record<string, JoinNullability>>, this['dynamic'], this['excludedMethods'], Assume<this['result'], any[]>, Assume<this['selectedFields'], ColumnsSelection>>;
-}
-export interface SingleStoreSelectHKT extends SingleStoreSelectHKTBase {
-    _type: SingleStoreSelectBase<this['tableName'], Assume<this['selection'], ColumnsSelection>, this['selectMode'], Assume<this['preparedQueryHKT'], PreparedQueryHKTBase>, Assume<this['nullabilityMap'], Record<string, JoinNullability>>, this['dynamic'], this['excludedMethods'], Assume<this['result'], any[]>, Assume<this['selectedFields'], ColumnsSelection>>;
-}
-export type SingleStoreSetOperatorExcludedMethods = 'where' | 'having' | 'groupBy' | 'session' | 'leftJoin' | 'rightJoin' | 'innerJoin' | 'fullJoin' | 'for';
-export type SingleStoreSelectWithout<T extends AnySingleStoreSelectQueryBuilder, TDynamic extends boolean, K extends keyof T & string, TResetExcluded extends boolean = false> = TDynamic extends true ? T : Omit<SingleStoreSelectKind<T['_']['hkt'], T['_']['tableName'], T['_']['selection'], T['_']['selectMode'], T['_']['preparedQueryHKT'], T['_']['nullabilityMap'], TDynamic, TResetExcluded extends true ? K : T['_']['excludedMethods'] | K, T['_']['result'], T['_']['selectedFields']>, TResetExcluded extends true ? K : T['_']['excludedMethods'] | K>;
-export type SingleStoreSelectPrepare<T extends AnySingleStoreSelect> = PreparedQueryKind<T['_']['preparedQueryHKT'], SingleStorePreparedQueryConfig & {
-    execute: T['_']['result'];
-    iterator: T['_']['result'][number];
-}, true>;
-export type SingleStoreSelectDynamic<T extends AnySingleStoreSelectQueryBuilder> = SingleStoreSelectKind<T['_']['hkt'], T['_']['tableName'], T['_']['selection'], T['_']['selectMode'], T['_']['preparedQueryHKT'], T['_']['nullabilityMap'], true, never, T['_']['result'], T['_']['selectedFields']>;
-export type CreateSingleStoreSelectFromBuilderMode<TBuilderMode extends 'db' | 'qb', TTableName extends string | undefined, TSelection extends ColumnsSelection, TSelectMode extends SelectMode, TPreparedQueryHKT extends PreparedQueryHKTBase> = TBuilderMode extends 'db' ? SingleStoreSelectBase<TTableName, TSelection, TSelectMode, TPreparedQueryHKT> : SingleStoreSelectQueryBuilderBase<SingleStoreSelectQueryBuilderHKT, TTableName, TSelection, TSelectMode, TPreparedQueryHKT>;
-export type SingleStoreSelectQueryBuilder<THKT extends SingleStoreSelectHKTBase = SingleStoreSelectQueryBuilderHKT, TTableName extends string | undefined = string | undefined, TSelection extends ColumnsSelection = ColumnsSelection, TSelectMode extends SelectMode = SelectMode, TPreparedQueryHKT extends PreparedQueryHKTBase = PreparedQueryHKTBase, TNullabilityMap extends Record<string, JoinNullability> = Record<string, JoinNullability>, TResult extends any[] = unknown[], TSelectedFields extends ColumnsSelection = ColumnsSelection> = SingleStoreSelectQueryBuilderBase<THKT, TTableName, TSelection, TSelectMode, TPreparedQueryHKT, TNullabilityMap, true, never, TResult, TSelectedFields>;
-export type AnySingleStoreSelectQueryBuilder = SingleStoreSelectQueryBuilderBase<any, any, any, any, any, any, any, any, any>;
-export type AnySingleStoreSetOperatorInterface = SingleStoreSetOperatorInterface<any, any, any, any, any, any, any, any, any>;
-export interface SingleStoreSetOperatorInterface<TTableName extends string | undefined, TSelection extends ColumnsSelection, TSelectMode extends SelectMode, TPreparedQueryHKT extends PreparedQueryHKTBase = PreparedQueryHKTBase, TNullabilityMap extends Record<string, JoinNullability> = TTableName extends string ? Record<TTableName, 'not-null'> : {}, TDynamic extends boolean = false, TExcludedMethods extends string = never, TResult extends any[] = SelectResult<TSelection, TSelectMode, TNullabilityMap>[], TSelectedFields extends ColumnsSelection = BuildSubquerySelection<TSelection, TNullabilityMap>> {
-    _: {
-        readonly hkt: SingleStoreSelectHKT;
-        readonly tableName: TTableName;
-        readonly selection: TSelection;
-        readonly selectMode: TSelectMode;
-        readonly preparedQueryHKT: TPreparedQueryHKT;
-        readonly nullabilityMap: TNullabilityMap;
-        readonly dynamic: TDynamic;
-        readonly excludedMethods: TExcludedMethods;
-        readonly result: TResult;
-        readonly selectedFields: TSelectedFields;
-    };
-}
-export type SingleStoreSetOperatorWithResult<TResult extends any[]> = SingleStoreSetOperatorInterface<any, any, any, any, any, any, any, TResult, any>;
-export type SingleStoreSelect<TTableName extends string | undefined = string | undefined, TSelection extends ColumnsSelection = Record<string, any>, TSelectMode extends SelectMode = SelectMode, TNullabilityMap extends Record<string, JoinNullability> = Record<string, JoinNullability>> = SingleStoreSelectBase<TTableName, TSelection, TSelectMode, PreparedQueryHKTBase, TNullabilityMap, true, never>;
-export type AnySingleStoreSelect = SingleStoreSelectBase<any, any, any, any, any, any, any, any>;
-export type SingleStoreSetOperator<TTableName extends string | undefined = string | undefined, TSelection extends ColumnsSelection = Record<string, any>, TSelectMode extends SelectMode = SelectMode, TPreparedQueryHKT extends PreparedQueryHKTBase = PreparedQueryHKTBase, TNullabilityMap extends Record<string, JoinNullability> = Record<string, JoinNullability>> = SingleStoreSelectBase<TTableName, TSelection, TSelectMode, TPreparedQueryHKT, TNullabilityMap, true, SingleStoreSetOperatorExcludedMethods>;
-export type SetOperatorRightSelect<TValue extends SingleStoreSetOperatorWithResult<TResult>, TResult extends any[]> = TValue extends SingleStoreSetOperatorInterface<any, any, any, any, any, any, any, infer TValueResult, any> ? ValidateShape<TValueResult[number], TResult[number], TypedQueryBuilder<any, TValueResult>> : TValue;
-export type SetOperatorRestSelect<TValue extends readonly SingleStoreSetOperatorWithResult<TResult>[], TResult extends any[]> = TValue extends [infer First, ...infer Rest] ? First extends SingleStoreSetOperatorInterface<any, any, any, any, any, any, any, infer TValueResult, any> ? Rest extends AnySingleStoreSetOperatorInterface[] ? [
-    ValidateShape<TValueResult[number], TResult[number], TypedQueryBuilder<any, TValueResult>>,
-    ...SetOperatorRestSelect<Rest, TResult>
-] : ValidateShape<TValueResult[number], TResult[number], TypedQueryBuilder<any, TValueResult>[]> : never : TValue;
-export type SingleStoreCreateSetOperatorFn = <TTableName extends string | undefined, TSelection extends ColumnsSelection, TSelectMode extends SelectMode, TValue extends SingleStoreSetOperatorWithResult<TResult>, TRest extends SingleStoreSetOperatorWithResult<TResult>[], TPreparedQueryHKT extends PreparedQueryHKTBase = PreparedQueryHKTBase, TNullabilityMap extends Record<string, JoinNullability> = TTableName extends string ? Record<TTableName, 'not-null'> : {}, TDynamic extends boolean = false, TExcludedMethods extends string = never, TResult extends any[] = SelectResult<TSelection, TSelectMode, TNullabilityMap>[], TSelectedFields extends ColumnsSelection = BuildSubquerySelection<TSelection, TNullabilityMap>>(leftSelect: SingleStoreSetOperatorInterface<TTableName, TSelection, TSelectMode, TPreparedQueryHKT, TNullabilityMap, TDynamic, TExcludedMethods, TResult, TSelectedFields>, rightSelect: SetOperatorRightSelect<TValue, TResult>, ...restSelects: SetOperatorRestSelect<TRest, TResult>) => SingleStoreSelectWithout<SingleStoreSelectBase<TTableName, TSelection, TSelectMode, TPreparedQueryHKT, TNullabilityMap, TDynamic, TExcludedMethods, TResult, TSelectedFields>, false, SingleStoreSetOperatorExcludedMethods, true>;
-export type GetSingleStoreSetOperators = {
-    union: SingleStoreCreateSetOperatorFn;
-    intersect: SingleStoreCreateSetOperatorFn;
-    except: SingleStoreCreateSetOperatorFn;
-    unionAll: SingleStoreCreateSetOperatorFn;
-    minus: SingleStoreCreateSetOperatorFn;
-};
+export type AppendToNullabilityMap<TJoinsNotNull extends Record<string, JoinNullability>, TJoinedName extends string | undefined, TJoinType extends JoinType> = TJoinedName extends string ? 'left' extends TJoinType ? TJoinsNotNull & {
+    [name in TJoinedName]: 'nullable';
+} : 'right' extends TJoinType ? SetJoinsNullability<TJoinsNotNull, 'nullable'> & {
+    [name in TJoinedName]: 'not-null';
+} : 'inner' extends TJoinType ? TJoinsNotNull & {
+    [name in TJoinedName]: 'not-null';
+} : 'cross' extends TJoinType ? TJoinsNotNull & {
+    [name in TJoinedName]: 'not-null';
+} : 'full' extends TJoinType ? SetJoinsNullability<TJoinsNotNull, 'nullable'> & {
+    [name in TJoinedName]: 'nullable';
+} : never : TJoinsNotNull;
+export type TableLike = Table | Subquery | View | SQL;
+export type GetSelectTableName<TTable extends TableLike> = TTable extends Table ? TTable['_']['name'] : TTable extends Subquery ? TTable['_']['alias'] : TTable extends View ? TTable['_']['name'] : TTable extends SQL ? undefined : never;
+export type GetSelectTableSelection<TTable extends TableLike> = TTable extends Table ? TTable['_']['columns'] : TTable extends Subquery | View ? Assume<TTable['_']['selectedFields'], ColumnsSelection> : TTable extends SQL ? {} : never;
+export type SelectResultField<T, TDeep extends boolean = true> = T extends DrizzleTypeError<any> ? T : T extends Table ? Equal<TDeep, true> extends true ? SelectResultField<T['_']['columns'], false> : never : T extends Column<any> ? GetColumnData<T> : T extends SQL | SQL.Aliased ? T['_']['type'] : T extends Record<string, any> ? SelectResultFields<T, true> : never;
+export type SelectResultFields<TSelectedFields, TDeep extends boolean = true> = Simplify<{
+    [Key in keyof TSelectedFields]: SelectResultField<TSelectedFields[Key], TDeep>;
+}>;
+export type SetOperator = 'union' | 'intersect' | 'except';
+export {};
