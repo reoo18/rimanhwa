@@ -1,7 +1,5 @@
-'use strict';
-
-var v4 = require('zod/v4');
-var drizzleOrm = require('drizzle-orm');
+import { z } from 'zod/v4';
+import { isTable, getTableColumns, getViewSelectedFields, is, Column, SQL, isView } from 'drizzle-orm';
 
 const CONSTANTS = {
     INT8_MIN: -128,
@@ -32,76 +30,76 @@ function isWithEnum(column) {
 }
 const isPgEnum = isWithEnum;
 
-const literalSchema = v4.z.union([v4.z.string(), v4.z.number(), v4.z.boolean(), v4.z.null()]);
-const jsonSchema = v4.z.union([
+const literalSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+const jsonSchema = z.union([
     literalSchema,
-    v4.z.record(v4.z.string(), v4.z.any()),
-    v4.z.array(v4.z.any()),
+    z.record(z.string(), z.any()),
+    z.array(z.any()),
 ]);
-const bufferSchema = v4.z.custom((v) => v instanceof Buffer); // eslint-disable-line no-instanceof/no-instanceof
+const bufferSchema = z.custom((v) => v instanceof Buffer); // eslint-disable-line no-instanceof/no-instanceof
 function columnToSchema(column, factory) {
-    const z = factory?.zodInstance ?? v4.z;
+    const z$1 = factory?.zodInstance ?? z;
     const coerce = factory?.coerce ?? {};
     let schema;
     if (isWithEnum(column)) {
-        schema = column.enumValues.length ? z.enum(column.enumValues) : z.string();
+        schema = column.enumValues.length ? z$1.enum(column.enumValues) : z$1.string();
     }
     if (!schema) {
         // Handle specific types
         if (isColumnType(column, ['PgGeometry', 'PgPointTuple'])) {
-            schema = z.tuple([z.number(), z.number()]);
+            schema = z$1.tuple([z$1.number(), z$1.number()]);
         }
         else if (isColumnType(column, ['PgGeometryObject', 'PgPointObject'])) {
-            schema = z.object({ x: z.number(), y: z.number() });
+            schema = z$1.object({ x: z$1.number(), y: z$1.number() });
         }
         else if (isColumnType(column, ['PgHalfVector', 'PgVector'])) {
-            schema = z.array(z.number());
+            schema = z$1.array(z$1.number());
             schema = column.dimensions ? schema.length(column.dimensions) : schema;
         }
         else if (isColumnType(column, ['PgLine'])) {
-            schema = z.tuple([z.number(), z.number(), z.number()]);
+            schema = z$1.tuple([z$1.number(), z$1.number(), z$1.number()]);
         }
         else if (isColumnType(column, ['PgLineABC'])) {
-            schema = z.object({
-                a: z.number(),
-                b: z.number(),
-                c: z.number(),
+            schema = z$1.object({
+                a: z$1.number(),
+                b: z$1.number(),
+                c: z$1.number(),
             });
         } // Handle other types
         else if (isColumnType(column, ['PgArray'])) {
-            schema = z.array(columnToSchema(column.baseColumn, factory));
+            schema = z$1.array(columnToSchema(column.baseColumn, factory));
             schema = column.size ? schema.length(column.size) : schema;
         }
         else if (column.dataType === 'array') {
-            schema = z.array(z.any());
+            schema = z$1.array(z$1.any());
         }
         else if (column.dataType === 'number') {
-            schema = numberColumnToSchema(column, z, coerce);
+            schema = numberColumnToSchema(column, z$1, coerce);
         }
         else if (column.dataType === 'bigint') {
-            schema = bigintColumnToSchema(column, z, coerce);
+            schema = bigintColumnToSchema(column, z$1, coerce);
         }
         else if (column.dataType === 'boolean') {
-            schema = coerce === true || coerce.boolean ? z.coerce.boolean() : z.boolean();
+            schema = coerce === true || coerce.boolean ? z$1.coerce.boolean() : z$1.boolean();
         }
         else if (column.dataType === 'date') {
-            schema = coerce === true || coerce.date ? z.coerce.date() : z.date();
+            schema = coerce === true || coerce.date ? z$1.coerce.date() : z$1.date();
         }
         else if (column.dataType === 'string') {
-            schema = stringColumnToSchema(column, z, coerce);
+            schema = stringColumnToSchema(column, z$1, coerce);
         }
         else if (column.dataType === 'json') {
             schema = jsonSchema;
         }
         else if (column.dataType === 'custom') {
-            schema = z.any();
+            schema = z$1.any();
         }
         else if (column.dataType === 'buffer') {
             schema = bufferSchema;
         }
     }
     if (!schema) {
-        schema = z.any();
+        schema = z$1.any();
     }
     return schema;
 }
@@ -240,13 +238,13 @@ function stringColumnToSchema(column, z, coerce) {
 }
 
 function getColumns(tableLike) {
-    return drizzleOrm.isTable(tableLike) ? drizzleOrm.getTableColumns(tableLike) : drizzleOrm.getViewSelectedFields(tableLike);
+    return isTable(tableLike) ? getTableColumns(tableLike) : getViewSelectedFields(tableLike);
 }
 function handleColumns(columns, refinements, conditions, factory) {
     const columnSchemas = {};
     for (const [key, selected] of Object.entries(columns)) {
-        if (!drizzleOrm.is(selected, drizzleOrm.Column) && !drizzleOrm.is(selected, drizzleOrm.SQL) && !drizzleOrm.is(selected, drizzleOrm.SQL.Aliased) && typeof selected === 'object') {
-            const columns = drizzleOrm.isTable(selected) || drizzleOrm.isView(selected) ? getColumns(selected) : selected;
+        if (!is(selected, Column) && !is(selected, SQL) && !is(selected, SQL.Aliased) && typeof selected === 'object') {
+            const columns = isTable(selected) || isView(selected) ? getColumns(selected) : selected;
             columnSchemas[key] = handleColumns(columns, refinements[key] ?? {}, conditions, factory);
             continue;
         }
@@ -255,8 +253,8 @@ function handleColumns(columns, refinements, conditions, factory) {
             columnSchemas[key] = refinement;
             continue;
         }
-        const column = drizzleOrm.is(selected, drizzleOrm.Column) ? selected : undefined;
-        const schema = column ? columnToSchema(column, factory) : v4.z.any();
+        const column = is(selected, Column) ? selected : undefined;
+        const schema = column ? columnToSchema(column, factory) : z.any();
         const refined = typeof refinement === 'function' ? refinement(schema) : schema;
         if (conditions.never(column)) {
             continue;
@@ -273,10 +271,10 @@ function handleColumns(columns, refinements, conditions, factory) {
             }
         }
     }
-    return v4.z.object(columnSchemas);
+    return z.object(columnSchemas);
 }
 function handleEnum(enum_, factory) {
-    const zod = factory?.zodInstance ?? v4.z;
+    const zod = factory?.zodInstance ?? z;
     return zod.enum(enum_.enumValues);
 }
 const selectConditions = {
@@ -328,14 +326,5 @@ function createSchemaFactory(options) {
     return { createSelectSchema, createInsertSchema, createUpdateSchema };
 }
 
-exports.bufferSchema = bufferSchema;
-exports.createInsertSchema = createInsertSchema;
-exports.createSchemaFactory = createSchemaFactory;
-exports.createSelectSchema = createSelectSchema;
-exports.createUpdateSchema = createUpdateSchema;
-exports.isColumnType = isColumnType;
-exports.isPgEnum = isPgEnum;
-exports.isWithEnum = isWithEnum;
-exports.jsonSchema = jsonSchema;
-exports.literalSchema = literalSchema;
-//# sourceMappingURL=index.cjs.map
+export { bufferSchema, createInsertSchema, createSchemaFactory, createSelectSchema, createUpdateSchema, isColumnType, isPgEnum, isWithEnum, jsonSchema, literalSchema };
+//# sourceMappingURL=index.mjs.map
