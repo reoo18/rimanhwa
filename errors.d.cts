@@ -1,5 +1,18 @@
-import type { ZodErrorMap } from "./ZodError.cjs";
-import defaultErrorMap from "./locales/en.cjs";
-export { defaultErrorMap };
-export declare function setErrorMap(map: ZodErrorMap): void;
-export declare function getErrorMap(): ZodErrorMap;
+import { entityKind } from "./entity.cjs";
+export declare class DrizzleError extends Error {
+    static readonly [entityKind]: string;
+    constructor({ message, cause }: {
+        message?: string;
+        cause?: unknown;
+    });
+}
+export declare class DrizzleQueryError extends Error {
+    query: string;
+    params: any[];
+    cause?: Error | undefined;
+    constructor(query: string, params: any[], cause?: Error | undefined);
+}
+export declare class TransactionRollbackError extends DrizzleError {
+    static readonly [entityKind]: string;
+    constructor();
+}
