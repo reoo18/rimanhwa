@@ -16,14 +16,18 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var view_common_exports = {};
-__export(view_common_exports, {
-  SQLiteViewConfig: () => SQLiteViewConfig
+var view_base_exports = {};
+__export(view_base_exports, {
+  SQLiteViewBase: () => SQLiteViewBase
 });
-module.exports = __toCommonJS(view_common_exports);
-const SQLiteViewConfig = Symbol.for("drizzle:SQLiteViewConfig");
+module.exports = __toCommonJS(view_base_exports);
+var import_entity = require("../entity.cjs");
+var import_sql = require("../sql/sql.cjs");
+class SQLiteViewBase extends import_sql.View {
+  static [import_entity.entityKind] = "SQLiteViewBase";
+}
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
-  SQLiteViewConfig
+  SQLiteViewBase
 });
-//# sourceMappingURL=view-common.cjs.map
+//# sourceMappingURL=view-base.cjs.map

@@ -3,10 +3,6 @@ var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -16,14 +12,6 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var view_common_exports = {};
-__export(view_common_exports, {
-  SQLiteViewConfig: () => SQLiteViewConfig
-});
-module.exports = __toCommonJS(view_common_exports);
-const SQLiteViewConfig = Symbol.for("drizzle:SQLiteViewConfig");
-// Annotate the CommonJS export names for ESM import in node:
-0 && (module.exports = {
-  SQLiteViewConfig
-});
-//# sourceMappingURL=view-common.cjs.map
+var select_types_exports = {};
+module.exports = __toCommonJS(select_types_exports);
+//# sourceMappingURL=select.types.cjs.map

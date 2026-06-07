@@ -1,8 +1,31 @@
-import { entityKind } from "../../entity.js";
-import { QueryPromise } from "../../query-promise.js";
-import {
-  mapRelationalRow
-} from "../../relations.js";
+"use strict";
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+var query_exports = {};
+__export(query_exports, {
+  RelationalQueryBuilder: () => RelationalQueryBuilder,
+  SQLiteRelationalQuery: () => SQLiteRelationalQuery,
+  SQLiteSyncRelationalQuery: () => SQLiteSyncRelationalQuery
+});
+module.exports = __toCommonJS(query_exports);
+var import_entity = require("../../entity.cjs");
+var import_query_promise = require("../../query-promise.cjs");
+var import_relations = require("../../relations.cjs");
 class RelationalQueryBuilder {
   constructor(mode, fullSchema, schema, tableNamesMap, table, tableConfig, dialect, session) {
     this.mode = mode;
@@ -14,7 +37,7 @@ class RelationalQueryBuilder {
     this.dialect = dialect;
     this.session = session;
   }
-  static [entityKind] = "SQLiteAsyncRelationalQueryBuilder";
+  static [import_entity.entityKind] = "SQLiteAsyncRelationalQueryBuilder";
   findMany(config) {
     return this.mode === "sync" ? new SQLiteSyncRelationalQuery(
       this.fullSchema,
@@ -62,7 +85,7 @@ class RelationalQueryBuilder {
     );
   }
 }
-class SQLiteRelationalQuery extends QueryPromise {
+class SQLiteRelationalQuery extends import_query_promise.QueryPromise {
   constructor(fullSchema, schema, tableNamesMap, table, tableConfig, dialect, session, config, mode) {
     super();
     this.fullSchema = fullSchema;
@@ -75,7 +98,7 @@ class SQLiteRelationalQuery extends QueryPromise {
     this.config = config;
     this.mode = mode;
   }
-  static [entityKind] = "SQLiteAsyncRelationalQuery";
+  static [import_entity.entityKind] = "SQLiteAsyncRelationalQuery";
   /** @internal */
   mode;
   /** @internal */
@@ -100,7 +123,7 @@ class SQLiteRelationalQuery extends QueryPromise {
       true,
       (rawRows, mapColumnValue) => {
         const rows = rawRows.map(
-          (row) => mapRelationalRow(this.schema, this.tableConfig, row, query.selection, mapColumnValue)
+          (row) => (0, import_relations.mapRelationalRow)(this.schema, this.tableConfig, row, query.selection, mapColumnValue)
         );
         if (this.mode === "first") {
           return rows[0];
@@ -140,14 +163,15 @@ class SQLiteRelationalQuery extends QueryPromise {
   }
 }
 class SQLiteSyncRelationalQuery extends SQLiteRelationalQuery {
-  static [entityKind] = "SQLiteSyncRelationalQuery";
+  static [import_entity.entityKind] = "SQLiteSyncRelationalQuery";
   sync() {
     return this.executeRaw();
   }
 }
-export {
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
   RelationalQueryBuilder,
   SQLiteRelationalQuery,
   SQLiteSyncRelationalQuery
-};
-//# sourceMappingURL=query.js.map
+});
+//# sourceMappingURL=query.cjs.map

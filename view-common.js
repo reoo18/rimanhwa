@@ -1,5 +1,5 @@
-const ViewBaseConfig = Symbol.for("drizzle:ViewBaseConfig");
+const SQLiteViewConfig = Symbol.for("drizzle:SQLiteViewConfig");
 export {
-  ViewBaseConfig
+  SQLiteViewConfig
 };
 //# sourceMappingURL=view-common.js.map
