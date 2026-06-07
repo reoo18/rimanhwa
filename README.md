@@ -1,65 +1,44 @@
-<div align='center'>
-<h1>drizzle-zod <a href=''><img alt='npm' src='https://img.shields.io/npm/v/drizzle-zod?label='></a></h1>
-<img alt='npm' src='https://img.shields.io/npm/dm/drizzle-zod'>
-<img alt='npm bundle size' src='https://img.shields.io/bundlephobia/min/drizzle-zod'>
-<a href='https://discord.gg/yfjTbVXMW4'><img alt='Discord' src='https://img.shields.io/discord/1043890932593987624'></a>
-<img alt='License' src='https://img.shields.io/npm/l/drizzle-zod'>
-<h6><i>If you know SQL, you know Drizzle ORM</i></h6>
-<hr />
+<div align="center">
+  <img src="./misc/readme/logo-github-sq-dark.svg#gh-dark-mode-only" />
+  <img src="./misc/readme/logo-github-sq-light.svg#gh-light-mode-only" />
 </div>
 
-`drizzle-zod` is a plugin for [Drizzle ORM](https://github.com/drizzle-team/drizzle-orm) that allows you to generate [Zod](https://zod.dev/) schemas from Drizzle ORM schemas.
+<br/>
+<div align="center">
+  <h3>Headless ORM for NodeJS, TypeScript and JavaScript 🚀</h3>
+  <a href="https://orm.drizzle.team">Website</a> •
+  <a href="https://orm.drizzle.team/docs/overview">Documentation</a> •
+  <a href="https://x.com/drizzleorm">Twitter</a> •
+  <a href="https://driz.link/discord">Discord</a>
+</div>
 
-**Features**
+<br/>
+<br/>
 
-- Create a select schema for tables, views and enums.
-- Create insert and update schemas for tables.
-- Supports all dialects: PostgreSQL, MySQL and SQLite.
+### What's Drizzle?
+Drizzle is a modern TypeScript ORM developers [wanna use in their next project](https://stateofdb.com/tools/drizzle). 
+It is [lightweight](https://bundlephobia.com/package/drizzle-orm) at only ~7.4kb minified+gzipped, and it's tree shakeable with exactly 0 dependencies. 
 
-# Usage
+**Drizzle supports every PostgreSQL, MySQL and SQLite database**, including serverless ones like [Turso](https://orm.drizzle.team/docs/get-started-sqlite#turso), [Neon](https://orm.drizzle.team/docs/get-started-postgresql#neon), [Xata](https://orm.drizzle.team/docs/connect-xata), [PlanetScale](https://orm.drizzle.team/docs/get-started-mysql#planetscale), [Cloudflare D1](https://orm.drizzle.team/docs/get-started-sqlite#cloudflare-d1), [FlyIO LiteFS](https://fly.io/docs/litefs/), [Vercel Postgres](https://orm.drizzle.team/docs/get-started-postgresql#vercel-postgres), [Supabase](https://orm.drizzle.team/docs/get-started-postgresql#supabase) and [AWS Data API](https://orm.drizzle.team/docs/get-started-postgresql#aws-data-api). No bells and whistles, no Rust binaries, no serverless adapters, everything just works out of the box.
 
-```ts
-import { pgEnum, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
-import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
-import { z } from 'zod';
+**Drizzle is serverless-ready by design**. It works in every major JavaScript runtime like NodeJS, Bun, Deno, Cloudflare Workers, Supabase functions, any Edge runtime, and even in browsers.  
+With Drizzle you can be [**fast out of the box**](https://orm.drizzle.team/benchmarks) and save time and costs while never introducing any data proxies into your infrastructure. 
 
-const users = pgTable('users', {
-  id: serial('id').primaryKey(),
-  name: text('name').notNull(),
-  email: text('email').notNull(),
-  role: text('role', { enum: ['admin', 'user'] }).notNull(),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+While you can use Drizzle as a JavaScript library, it shines with TypeScript. It lets you [**declare SQL schemas**](https://orm.drizzle.team/docs/sql-schema-declaration) and build both [**relational**](https://orm.drizzle.team/docs/rqb) and [**SQL-like queries**](https://orm.drizzle.team/docs/select), while keeping the balance between type-safety and extensibility for toolmakers to build on top.  
 
-// Schema for inserting a user - can be used to validate API requests
-const insertUserSchema = createInsertSchema(users);
+### Ecosystem
+While Drizzle ORM remains a thin typed layer on top of SQL, we made a set of tools for people to have best possible developer experience.  
+  
+Drizzle comes with a powerful [**Drizzle Kit**](https://orm.drizzle.team/kit-docs/overview) CLI companion for you to have hassle-free migrations. It can generate SQL migration files for you or apply schema changes directly to the database.  
+  
+We also have [**Drizzle Studio**](https://orm.drizzle.team/drizzle-studio/overview) for you to effortlessly browse and manipulate data in your database of choice.
 
-// Schema for updating a user - can be used to validate API requests
-const updateUserSchema = createUpdateSchema(users);
+### Documentation
+Check out the full documentation on [the website](https://orm.drizzle.team/docs/overview).
 
-// Schema for selecting a user - can be used to validate API responses
-const selectUserSchema = createSelectSchema(users);
-
-// Overriding the fields
-const insertUserSchema = createInsertSchema(users, {
-  role: z.string(),
-});
-
-// Refining the fields - useful if you want to change the fields before they become nullable/optional in the final schema
-const insertUserSchema = createInsertSchema(users, {
-  id: (schema) => schema.positive(),
-  email: (schema) => schema.email(),
-  role: z.string(),
-});
-
-// Usage
-
-const user = insertUserSchema.parse({
-  name: 'John Doe',
-  email: 'johndoe@test.com',
-  role: 'admin',
-});
-
-// Zod schema type is also inferred from the table schema, so you have full type safety
-const requestSchema = insertUserSchema.pick({ name: true, email: true });
-```
+### Our sponsors ❤️
+<p align="center">
+<a href="https://drizzle.team" target="_blank">
+<img src='https://api.drizzle.team/v2/sponsors/svg'/>
+</a>
+</p>
